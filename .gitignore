@@ -1,0 +1,14 @@
+bin/
+tools/k8s/
+
+*.coverprofile
+*.out
+*.html
+
+.vscode
+.idea
+.DS_Store
+*~
+
+# gosec report
+gosec-report.sarif

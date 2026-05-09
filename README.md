@@ -1,6 +1,6 @@
 # oidc-apps
 
-[![Build](https://github.com/nickytd/oidc-apps/actions/workflows/build.yaml/badge.svg)](https://github.com/nickytd/oidc-apps/actions/workflows/build.yaml)
+[![Build](https://github.com/nickytd/oidc-apps/actions/workflows/build.yml/badge.svg)](https://github.com/nickytd/oidc-apps/actions/workflows/build.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/nickytd/oidc-apps)](https://goreportcard.com/report/github.com/nickytd/oidc-apps)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE) [![Release](https://img.shields.io/github/v/release/nickytd/oidc-apps.svg?style=flat)](https://github.com/nickytd/oidc-apps) [![Go Reference](https://pkg.go.dev/badge/github.com/nickytd/oidc-apps.svg)](https://pkg.go.dev/github.com/nickytd/oidc-apps)
 

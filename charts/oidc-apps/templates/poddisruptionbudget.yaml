@@ -1,0 +1,14 @@
+# SPDX-FileCopyrightText: 2026 nickytd
+# SPDX-License-Identifier: Apache-2.0
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "oidc-apps.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels: {{- include "oidc-apps.labels" . | nindent 4 }}
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      {{- include "oidc-apps.selectorLabels" . | nindent 6 }}

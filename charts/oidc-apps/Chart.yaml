@@ -1,0 +1,6 @@
+apiVersion: v2
+name: oidc-apps
+description: OIDC authentication and RBAC authorization sidecars for Kubernetes workloads
+type: application
+version: 0.1.0
+appVersion: "v0.1.0-dev"

@@ -1,0 +1,741 @@
+// SPDX-FileCopyrightText: 2026 nickytd
+// SPDX-License-Identifier: Apache-2.0
+
+package oidcapps
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"os"
+	"sync"
+	"time"
+
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
+	autoscalerv1 "k8s.io/autoscaler/vertical-pod-autoscaler/pkg/apis/autoscaling.k8s.io/v1"
+	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/scale/scheme/autoscalingv1"
+	controllerruntime "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/config"
+	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
+	crhealthz "sigs.k8s.io/controller-runtime/pkg/healthz"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
+	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
+
+	"github.com/nickytd/oidc-apps/pkg/certificates"
+	"github.com/nickytd/oidc-apps/pkg/configuration"
+	"github.com/nickytd/oidc-apps/pkg/constants"
+	"github.com/nickytd/oidc-apps/pkg/controllers"
+	"github.com/nickytd/oidc-apps/pkg/healthz"
+	oidcappswebhook "github.com/nickytd/oidc-apps/pkg/webhook"
+)
+
+var (
+	extensionConfig *configuration.OIDCAppsControllerConfig
+	predicates      predicate.GenerationChangedPredicate
+	once            sync.Once
+	_log            = logf.Log
+)
+
+// RunController is the entry point for initialzing and starting the controller-runtime manager
+func RunController(ctx context.Context, o *Options) error {
+	// Load extension configuration first to determine HTTPRoute support
+	extensionConfig = configuration.CreateControllerConfigOrDie(o.controllerConfigPath)
+	httpRouteEnabled := extensionConfig.IsHTTPRouteEnabled()
+
+	if httpRouteEnabled {
+		_log.Info("Gateway API HTTPRoute support enabled via configuration")
+	}
+
+	// Initialize a scheme which will contain the API definitions
+	sch := scheme.Scheme
+
+	// Add core Kubernetes schemes
+	if err := scheme.AddToScheme(sch); err != nil {
+		return fmt.Errorf("could not initialize the runtime scheme: %w", err)
+	}
+
+	// Add autoscaler schemes
+	if o.enableVpa {
+		if err := autoscalerv1.AddToScheme(sch); err != nil {
+			return fmt.Errorf("could not initialize the runtime scheme: %w", err)
+		}
+	}
+
+	// Add Gateway API schemes for HTTPRoute support (only when enabled in config)
+	if httpRouteEnabled {
+		if err := gatewayv1.Install(sch); err != nil {
+			return fmt.Errorf("could not initialize the gateway-api scheme: %w", err)
+		}
+	}
+
+	// Limit the cache
+	oidcAppsSelector := labels.Everything()
+
+	if len(o.cacheSelectorString) > 0 {
+		var err error
+		if oidcAppsSelector, err = labels.Parse(o.cacheSelectorString); err != nil {
+			return fmt.Errorf("could not parse the cache selector: %w", err)
+		}
+
+		_log.Info("Using cache selector", "selector", oidcAppsSelector.String())
+	}
+
+	cacheOptions := cache.Options{
+		Scheme: sch,
+		ByObject: map[client.Object]cache.ByObject{
+			&corev1.Pod{}: {
+				Label: oidcAppsSelector,
+			},
+			&corev1.Secret{}: {
+				Label: labels.SelectorFromSet(labels.Set{constants.LabelKey: constants.LabelValue}),
+			},
+			&corev1.Service{}: {
+				Label: labels.SelectorFromSet(labels.Set{constants.LabelKey: constants.LabelValue}),
+			},
+			&corev1.Namespace{}: {},
+			&networkingv1.Ingress{}: {
+				Label: labels.SelectorFromSet(labels.Set{constants.LabelKey: constants.LabelValue}),
+			},
+		}}
+
+	if o.enableVpa {
+		cacheOptions.ByObject[&autoscalerv1.VerticalPodAutoscaler{}] = cache.ByObject{
+			Label: oidcAppsSelector,
+		}
+	}
+
+	// Add HTTPRoute to cache only when Gateway API support is enabled in config
+	if httpRouteEnabled {
+		cacheOptions.ByObject[&gatewayv1.HTTPRoute{}] = cache.ByObject{
+			Label: labels.SelectorFromSet(labels.Set{constants.LabelKey: constants.LabelValue}),
+		}
+	}
+
+	// NAMESPACE is a required environment variable for the oidc-apps-controller certificate manager
+	if !o.useCertManager && os.Getenv(constants.NAMESPACE) == "" {
+		return errors.New("NAMESPACE environment variable is not set")
+	}
+	// NAMESPACE is a required environment variable for the image pull secret reconciler
+	if o.registrySecret != "" && os.Getenv(constants.NAMESPACE) == "" {
+		return errors.New("NAMESPACE environment variable is not set")
+	}
+
+	cfg := config.GetConfigOrDie()
+	cfg.QPS = float32(100)
+	cfg.Burst = 200
+
+	mgr, err := manager.New(cfg,
+		manager.Options{
+			Cache:                         cacheOptions,
+			Scheme:                        sch,
+			LeaderElection:                true,
+			LeaderElectionID:              "oidc-apps-controller",
+			LeaderElectionNamespace:       os.Getenv(constants.NAMESPACE),
+			LeaseDuration:                 new(15 * time.Second),
+			RenewDeadline:                 new(10 * time.Second),
+			RetryPeriod:                   new(2 * time.Second),
+			LeaderElectionReleaseOnCancel: true,
+			HealthProbeBindAddress:        ":8081",
+			Metrics:                       metricsserver.Options{BindAddress: fmt.Sprintf(":%d", o.metricsPort)},
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("could not initialize the controller-runtime manager: %w", err)
+	}
+
+	// Update extension config with client and logger now that manager is ready
+	extensionConfig.SetClient(mgr.GetClient())
+	extensionConfig.SetLogger(mgr.GetLogger())
+
+	if err := initializeManagerIndices(mgr); err != nil {
+		return fmt.Errorf("could not initialize cache indices: %w", err)
+	}
+
+	if err := addDeploymentController(mgr); err != nil {
+		return fmt.Errorf("could not initialize deployment controller: %w", err)
+	}
+
+	if err := addStatefulSetController(mgr); err != nil {
+		return fmt.Errorf("could not initialize statefulset controller: %w", err)
+	}
+
+	if err := addWebhookCertificateManager(mgr, o); err != nil {
+		return fmt.Errorf("could not initialize webhook certificate manager: %w", err)
+	}
+
+	if err := addPrivateRegistrySecretControllers(mgr, o); err != nil {
+		return fmt.Errorf("could not initialize private registry secret manager: %w", err)
+	}
+
+	if err := addWebhooks(mgr, o); err != nil {
+		return fmt.Errorf("could not initialize mutating webhooks: %w", err)
+	}
+
+	if err := mgr.AddReadyzCheck("informer-sync", healthz.NewCacheSyncHealthz(mgr.GetCache())); err != nil {
+		return fmt.Errorf("could not initialize controller readycheck: %w", err)
+	}
+
+	if err := mgr.AddHealthzCheck("ping", crhealthz.Ping); err != nil {
+		return fmt.Errorf("could not initialize controller healthcheck: %w", err)
+	}
+
+	// Start the manager
+	return mgr.Start(ctx)
+}
+
+func fetchPredicates(extensionConfig *configuration.OIDCAppsControllerConfig) predicate.GenerationChangedPredicate {
+	once.Do(
+		func() {
+			predicates = predicate.GenerationChangedPredicate{
+
+				TypedFuncs: predicate.Funcs{
+					CreateFunc: func(e event.CreateEvent) bool {
+						if extensionConfig.Match(e.Object) {
+							_log.V(9).Info("create event", "name", e.Object.GetName(), "namespace", e.Object.GetNamespace())
+
+							return true
+						}
+
+						_, found := e.Object.GetLabels()[constants.LabelKey]
+
+						return found
+					},
+					DeleteFunc: func(e event.DeleteEvent) bool {
+						if extensionConfig.Match(e.Object) {
+							_log.V(9).Info("delete event", "name", e.Object.GetName(), "namespace",
+								e.Object.GetNamespace())
+
+							return true
+						}
+
+						_, found := e.Object.GetLabels()[constants.LabelKey]
+
+						return found
+					},
+					UpdateFunc: func(e event.UpdateEvent) bool {
+						if extensionConfig.Match(e.ObjectNew) {
+							_log.V(9).Info("update event", "name", e.ObjectNew.GetName(), "namespace",
+								e.ObjectNew.GetNamespace())
+
+							return true
+						}
+
+						_, found := e.ObjectNew.GetLabels()[constants.LabelKey]
+
+						return found
+					},
+					GenericFunc: func(e event.GenericEvent) bool {
+						if extensionConfig.Match(e.Object) {
+							_log.V(9).Info("generic event", "name", e.Object.GetName(), "namespace",
+								e.Object.GetNamespace())
+
+							return true
+						}
+
+						_, found := e.Object.GetLabels()[constants.LabelKey]
+
+						return found
+					},
+				},
+			}
+		},
+	)
+
+	return predicates
+}
+
+func initializeManagerIndices(mgr manager.Manager) error {
+	if err := mgr.GetFieldIndexer().IndexField(
+		context.Background(),
+		&corev1.Secret{},
+		"metadata.labels"+constants.LabelKey,
+		func(obj client.Object) []string {
+			secret, ok := obj.(*corev1.Secret)
+			if !ok {
+				_log.Error(errors.New("object is not a secret"), "object", obj)
+
+				return nil
+			}
+
+			if value, exists := secret.GetLabels()[constants.LabelKey]; exists {
+				return []string{value}
+			}
+
+			return nil
+		},
+	); err != nil {
+		return fmt.Errorf("could not set up the oidc-app-controller %T index: %w", corev1.Secret{}, err)
+	}
+
+	if err := mgr.GetFieldIndexer().IndexField(
+		context.Background(),
+		&corev1.Service{},
+		"metadata.labels"+constants.LabelKey,
+		func(obj client.Object) []string {
+			service, ok := obj.(*corev1.Service)
+			if !ok {
+				_log.Error(errors.New("object is not a service"), "object", obj)
+
+				return nil
+			}
+
+			if value, exists := service.GetLabels()[constants.LabelKey]; exists {
+				return []string{value}
+			}
+
+			return nil
+		},
+	); err != nil {
+		return fmt.Errorf("could not set up the oidc-app-controller %T index: %w", corev1.Service{}, err)
+	}
+
+	if err := mgr.GetFieldIndexer().IndexField(
+		context.Background(),
+		&networkingv1.Ingress{},
+		"metadata.labels"+constants.LabelKey,
+		func(obj client.Object) []string {
+			ingress, ok := obj.(*networkingv1.Ingress)
+			if !ok {
+				_log.Error(errors.New("object is not an ingress"), "object", obj)
+
+				return nil
+			}
+
+			if value, exists := ingress.GetLabels()[constants.LabelKey]; exists {
+				return []string{value}
+			}
+
+			return nil
+		},
+	); err != nil {
+		return fmt.Errorf("could not set up the oidc-app-controller %T index: %w", networkingv1.Ingress{}, err)
+	}
+
+	// Add HTTPRoute index only when Gateway API support is enabled
+	if extensionConfig.IsHTTPRouteEnabled() {
+		if err := mgr.GetFieldIndexer().IndexField(
+			context.Background(),
+			&gatewayv1.HTTPRoute{},
+			"metadata.labels"+constants.LabelKey,
+			func(obj client.Object) []string {
+				httpRoute, ok := obj.(*gatewayv1.HTTPRoute)
+				if !ok {
+					_log.Error(errors.New("object is not an httproute"), "object", obj)
+
+					return nil
+				}
+
+				if value, exists := httpRoute.GetLabels()[constants.LabelKey]; exists {
+					return []string{value}
+				}
+
+				return nil
+			},
+		); err != nil {
+			return fmt.Errorf("could not set up the oidc-app-controller %T index: %w", gatewayv1.HTTPRoute{}, err)
+		}
+	}
+
+	return nil
+}
+
+func addDeploymentController(mgr manager.Manager) error {
+	controllerBuilder := controllerruntime.NewControllerManagedBy(mgr).
+		Named("oidc-apps-deployments").
+		For(&appsv1.Deployment{}).
+		WithEventFilter(fetchPredicates(extensionConfig)).
+		Watches(
+			&corev1.Secret{},
+			handler.EnqueueRequestForOwner(
+				mgr.GetScheme(),
+				mgr.GetRESTMapper(),
+				&appsv1.Deployment{},
+			),
+			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})).
+		Watches(
+			&corev1.Service{},
+			handler.EnqueueRequestForOwner(
+				mgr.GetScheme(),
+				mgr.GetRESTMapper(),
+				&appsv1.Deployment{},
+			),
+			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})).
+		Watches(
+			&networkingv1.Ingress{},
+			handler.EnqueueRequestForOwner(
+				mgr.GetScheme(),
+				mgr.GetRESTMapper(),
+				&appsv1.Deployment{},
+			),
+			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})).
+		Watches(
+			&corev1.Pod{},
+			handler.EnqueueRequestsFromMapFunc(PodMapFuncForDeployment(mgr)),
+			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{}))
+
+	// Add HTTPRoute watches only when Gateway API support is enabled
+	if extensionConfig.IsHTTPRouteEnabled() {
+		controllerBuilder = controllerBuilder.Watches(
+			&gatewayv1.HTTPRoute{},
+			handler.EnqueueRequestForOwner(
+				mgr.GetScheme(),
+				mgr.GetRESTMapper(),
+				&appsv1.Deployment{},
+			),
+			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{}))
+	}
+
+	return controllerBuilder.Complete(&controllers.DeploymentReconciler{Client: mgr.GetClient()})
+}
+
+func addStatefulSetController(mgr manager.Manager) error {
+	controllerBuilder := controllerruntime.NewControllerManagedBy(mgr).
+		Named("oidc-apps-statefulsets").
+		For(&appsv1.StatefulSet{}).
+		WithEventFilter(fetchPredicates(extensionConfig)).
+		Watches(
+			&corev1.Pod{},
+			handler.EnqueueRequestForOwner(
+				mgr.GetScheme(),
+				mgr.GetRESTMapper(),
+				&appsv1.StatefulSet{},
+			),
+			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})).
+		Watches(
+			&corev1.Secret{},
+			handler.EnqueueRequestForOwner(
+				mgr.GetScheme(),
+				mgr.GetRESTMapper(),
+				&appsv1.StatefulSet{},
+			),
+			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})).
+		Watches(
+			&corev1.Service{},
+			handler.EnqueueRequestsFromMapFunc(ServiceMapFuncForStatefulset(mgr)),
+			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})).
+		Watches(
+			&networkingv1.Ingress{},
+			handler.EnqueueRequestsFromMapFunc(IngressMapFuncForStatefulset(mgr)),
+			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{}))
+
+	// Add HTTPRoute watches only when Gateway API support is enabled
+	if extensionConfig.IsHTTPRouteEnabled() {
+		controllerBuilder = controllerBuilder.Watches(
+			&gatewayv1.HTTPRoute{},
+			handler.EnqueueRequestsFromMapFunc(HTTPRouteMapFuncForStatefulset(mgr)),
+			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{}))
+	}
+
+	return controllerBuilder.Complete(&controllers.StatefulSetReconciler{Client: mgr.GetClient()})
+}
+
+// Add certificate manager in case no external certificate manager is available
+func addWebhookCertificateManager(mgr manager.Manager, o *Options) error {
+	if !o.useCertManager {
+		certManager, err := certificates.New(o.webhookCertsDir, o.webhookName, os.Getenv(constants.NAMESPACE), mgr.GetClient(), mgr.GetConfig())
+		if err != nil {
+			return err
+		}
+
+		return mgr.Add(certManager)
+	}
+
+	return nil
+}
+
+// Add namespace && image pull secret reconcilers if the registry-secret parameter is present
+func addPrivateRegistrySecretControllers(mgr manager.Manager, o *Options) error {
+	if o.registrySecret != "" {
+		imagePullSecretPredicates := predicate.GenerationChangedPredicate{
+			TypedFuncs: predicate.Funcs{
+				CreateFunc: func(e event.CreateEvent) bool {
+					return e.Object.GetName() == o.registrySecret && e.Object.GetNamespace() == os.Getenv(constants.NAMESPACE)
+				},
+				UpdateFunc: func(e event.UpdateEvent) bool {
+					return e.ObjectNew.GetName() == o.registrySecret && e.ObjectNew.GetNamespace() == os.Getenv(constants.NAMESPACE)
+				},
+				DeleteFunc: func(e event.DeleteEvent) bool {
+					return e.Object.GetName() == o.registrySecret && e.Object.GetNamespace() == os.Getenv(constants.NAMESPACE)
+				},
+				GenericFunc: func(e event.GenericEvent) bool {
+					return e.Object.GetName() == o.registrySecret && e.Object.GetNamespace() == os.Getenv(constants.NAMESPACE)
+				},
+			},
+		}
+		if err := controllerruntime.NewControllerManagedBy(mgr).
+			Named("image-pull-secret").
+			For(&corev1.Secret{}).
+			WithEventFilter(imagePullSecretPredicates).
+			Complete(&controllers.ImagePullSecretReconciler{Client: mgr.GetClient(),
+				SecretName: o.registrySecret}); err != nil {
+			return err
+		}
+
+		secretKey := types.NamespacedName{
+			Namespace: os.Getenv(constants.NAMESPACE),
+			Name:      o.registrySecret,
+		}
+
+		if err := controllerruntime.NewControllerManagedBy(mgr).
+			Named("namespace").
+			For(&corev1.Namespace{}).
+			Complete(&controllers.NamespaceReconciler{Client: mgr.GetClient(), Secret: secretKey}); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func addWebhooks(mgr manager.Manager, o *Options) error {
+	// Add Mutating Admission Webhook Server
+	webhookServer := webhook.NewServer(webhook.Options{
+		Port:    o.webhookPort,
+		CertDir: o.webhookCertsDir,
+	})
+
+	webhookServer.Register(
+		constants.PodWebHookPath,
+		&webhook.Admission{Handler: &oidcappswebhook.PodMutator{
+			Client:          mgr.GetClient(),
+			Decoder:         admission.NewDecoder(scheme.Scheme),
+			ImagePullSecret: o.registrySecret,
+		}},
+	)
+
+	if o.enableVpa {
+		s := runtime.NewScheme()
+		if err := autoscalingv1.AddToScheme(s); err != nil {
+			return err
+		}
+
+		webhookServer.Register(
+			constants.VpaWebHookPath,
+			&webhook.Admission{Handler: &oidcappswebhook.VPAMutator{
+				Client:  mgr.GetClient(),
+				Decoder: admission.NewDecoder(s),
+			}},
+		)
+	}
+
+	// Add the server to the manager
+	return mgr.Add(webhookServer)
+}
+
+// IsOidcAppsPod returns true if the pod is an oidc-apps enabled pod
+func IsOidcAppsPod(pod *corev1.Pod) bool {
+	for _, c := range pod.Spec.Containers {
+		if c.Name == constants.ContainerNameOauth2Proxy || c.Name == constants.ContainerNameKubeRbacProxy {
+			_log.V(9).Info("oidc-apps enabled pod", "pod", pod.Name)
+
+			return true
+		}
+	}
+
+	return false
+}
+
+// PodMapFuncForDeployment returns a map function that returns reconcile requests for a target deployment triggered
+// on changes of the owned pods
+func PodMapFuncForDeployment(mgr manager.Manager) func(ctx context.Context, obj client.Object) []reconcile.Request {
+	return func(ctx context.Context, obj client.Object) []reconcile.Request {
+		pod, ok := obj.(*corev1.Pod)
+		if !ok {
+			_log.Error(errors.New("object is not a pod"), "object", obj)
+
+			return nil
+		}
+
+		if !IsOidcAppsPod(pod) {
+			return nil
+		}
+
+		c := mgr.GetClient()
+
+		for _, r := range pod.GetOwnerReferences() {
+			if r.Kind != "ReplicaSet" {
+				continue
+			}
+
+			rs := &appsv1.ReplicaSet{}
+			if err := c.Get(ctx, types.NamespacedName{Name: r.Name, Namespace: pod.Namespace}, rs); client.IgnoreNotFound(err) != nil {
+				_log.Error(err, "could not get replicaset", "name", r.Name, "namespace", pod.Namespace)
+			}
+
+			for _, d := range rs.GetOwnerReferences() {
+				if d.Kind != "Deployment" {
+					continue
+				}
+
+				deployment := &appsv1.Deployment{}
+				if err := c.Get(ctx, types.NamespacedName{Name: d.Name, Namespace: rs.Namespace}, deployment); client.IgnoreNotFound(err) != nil {
+					_log.Error(err, "could not get deployment", "name", d.Name, "namespace", rs.Namespace)
+				}
+
+				_log.V(9).Info("enqueue deployment", "name", deployment.Name, "namespace", deployment.Namespace)
+
+				return []reconcile.Request{{NamespacedName: types.NamespacedName{Name: deployment.Name, Namespace: deployment.Namespace}}}
+			}
+		}
+
+		return nil
+	}
+}
+
+// IngressMapFuncForStatefulset returns a map function that returns reconcile requests for a target statefulset triggered
+// on changes of an ingress owned by a pod owned by the statefulset
+func IngressMapFuncForStatefulset(mgr manager.Manager) func(ctx context.Context, obj client.Object) []reconcile.Request {
+	return func(ctx context.Context, obj client.Object) []reconcile.Request {
+		ingress, ok := obj.(*networkingv1.Ingress)
+		if !ok {
+			_log.Error(errors.New("object is not an ingress"), "object", obj)
+
+			return nil
+		}
+
+		c := mgr.GetClient()
+
+		for _, o := range ingress.GetOwnerReferences() {
+			if o.Kind != "Pod" {
+				continue
+			}
+
+			pod := &corev1.Pod{}
+			if err := c.Get(ctx, types.NamespacedName{Name: o.Name, Namespace: ingress.Namespace}, pod); client.IgnoreNotFound(err) != nil {
+				_log.Error(err, "could not get pod", "name", o.Name, "namespace", ingress.Namespace)
+			}
+
+			if len(pod.Name) == 0 {
+				continue
+			}
+
+			for _, r := range pod.GetOwnerReferences() {
+				if r.Kind != "StatefulSet" {
+					continue
+				}
+
+				statefulset := &appsv1.StatefulSet{}
+				if err := c.Get(ctx, types.NamespacedName{Name: r.Name, Namespace: pod.Namespace}, statefulset); client.IgnoreNotFound(err) != nil {
+					_log.Error(err, "could not get statefulset", "name", r.Name, "namespace", pod.Namespace)
+				}
+
+				_log.V(9).Info("enqueue statefulset", "name", statefulset.Name, "namespace",
+					statefulset.Namespace)
+
+				return []reconcile.Request{{NamespacedName: types.NamespacedName{Name: statefulset.Name, Namespace: statefulset.Namespace}}}
+			}
+		}
+
+		return nil
+	}
+}
+
+// ServiceMapFuncForStatefulset returns a map function that returns reconcile requests for a target statefulset triggered
+// on changes of a service owned by a pod owned by the statefulset
+func ServiceMapFuncForStatefulset(mgr manager.Manager) func(ctx context.Context, obj client.Object) []reconcile.Request {
+	return func(ctx context.Context, obj client.Object) []reconcile.Request {
+		service, ok := obj.(*corev1.Service)
+		if !ok {
+			_log.Error(errors.New("object is not a service"), "object", obj)
+
+			return nil
+		}
+
+		c := mgr.GetClient()
+
+		for _, o := range service.GetOwnerReferences() {
+			if o.Kind != "Pod" {
+				continue
+			}
+
+			pod := &corev1.Pod{}
+			if err := c.Get(ctx, types.NamespacedName{Name: o.Name, Namespace: service.Namespace}, pod); client.IgnoreNotFound(err) != nil {
+				_log.Error(err, "could not get pod", "name", o.Name, "namespace", service.Namespace)
+			}
+
+			if len(pod.Name) == 0 {
+				continue
+			}
+
+			for _, r := range pod.GetOwnerReferences() {
+				if r.Kind != "StatefulSet" {
+					continue
+				}
+
+				statefulset := &appsv1.StatefulSet{}
+				if err := c.Get(ctx, types.NamespacedName{Name: r.Name, Namespace: pod.Namespace}, statefulset); client.IgnoreNotFound(err) != nil {
+					_log.Error(err, "could not get statefulset", "name", r.Name, "namespace", pod.Namespace)
+				}
+
+				_log.V(9).Info("enqueue statefulset", "name", statefulset.Name, "namespace", statefulset.Namespace)
+
+				return []reconcile.Request{{NamespacedName: types.NamespacedName{Name: statefulset.Name, Namespace: statefulset.Namespace}}}
+			}
+		}
+
+		return nil
+	}
+}
+
+// HTTPRouteMapFuncForStatefulset returns a map function that returns reconcile requests for a target statefulset triggered
+// on changes of an HTTPRoute owned by a pod owned by the statefulset
+func HTTPRouteMapFuncForStatefulset(mgr manager.Manager) func(ctx context.Context, obj client.Object) []reconcile.Request {
+	return func(ctx context.Context, obj client.Object) []reconcile.Request {
+		httpRoute, ok := obj.(*gatewayv1.HTTPRoute)
+		if !ok {
+			_log.Error(errors.New("object is not an httproute"), "object", obj)
+
+			return nil
+		}
+
+		c := mgr.GetClient()
+
+		for _, o := range httpRoute.GetOwnerReferences() {
+			if o.Kind != "Pod" {
+				continue
+			}
+
+			pod := &corev1.Pod{}
+			if err := c.Get(ctx, types.NamespacedName{Name: o.Name, Namespace: httpRoute.Namespace}, pod); client.IgnoreNotFound(err) != nil {
+				_log.Error(err, "could not get pod", "name", o.Name, "namespace", httpRoute.Namespace)
+			}
+
+			if len(pod.Name) == 0 {
+				continue
+			}
+
+			for _, r := range pod.GetOwnerReferences() {
+				if r.Kind != "StatefulSet" {
+					continue
+				}
+
+				statefulset := &appsv1.StatefulSet{}
+				if err := c.Get(ctx, types.NamespacedName{Name: r.Name, Namespace: pod.Namespace}, statefulset); client.IgnoreNotFound(err) != nil {
+					_log.Error(err, "could not get statefulset", "name", r.Name, "namespace", pod.Namespace)
+				}
+
+				_log.V(9).Info("enqueue statefulset", "name", statefulset.Name, "namespace", statefulset.Namespace)
+
+				return []reconcile.Request{{NamespacedName: types.NamespacedName{Name: statefulset.Name, Namespace: statefulset.Namespace}}}
+			}
+		}
+
+		return nil
+	}
+}

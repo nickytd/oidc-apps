@@ -1,0 +1,84 @@
+# SPDX-FileCopyrightText: 2026 nickytd
+# SPDX-License-Identifier: Apache-2.0
+
+name: Release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'VERSION'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Read version
+        id: version
+        run: |
+          VERSION=$(cat VERSION | tr -d '[:space:]')
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          if [[ "${VERSION}" == *-dev* ]]; then
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Skip if dev version
+        if: steps.version.outputs.release == 'false'
+        run: echo "Version ${{ steps.version.outputs.version }} is a dev version, skipping release."
+
+      - name: Setup Go
+        if: steps.version.outputs.release == 'true'
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: 'go.mod'
+
+      - name: Login to GHCR
+        if: steps.version.outputs.release == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update chart appVersion
+        if: steps.version.outputs.release == 'true'
+        run: |
+          sed -i "s/^appVersion:.*/appVersion: \"${{ steps.version.outputs.version }}\"/" charts/oidc-apps/Chart.yaml
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add charts/oidc-apps/Chart.yaml
+          git commit -m "chore: bump chart appVersion to ${{ steps.version.outputs.version }}"
+          git push
+
+      - name: Build and push Docker images
+        if: steps.version.outputs.release == 'true'
+        run: |
+          make docker-images
+          docker push ghcr.io/nickytd/oidc-apps/oidc-apps:latest
+          docker push ghcr.io/nickytd/oidc-apps/oidc-apps:${{ steps.version.outputs.version }}
+          docker push ghcr.io/nickytd/oidc-apps/kube-rbac-proxy:latest
+          docker push ghcr.io/nickytd/oidc-apps/kube-rbac-proxy:${{ steps.version.outputs.version }}
+
+      - name: Create git tag
+        if: steps.version.outputs.release == 'true'
+        run: |
+          git tag -a "${{ steps.version.outputs.version }}" -m "Release ${{ steps.version.outputs.version }}"
+          git push origin "${{ steps.version.outputs.version }}"
+
+      - name: Create GitHub Release
+        if: steps.version.outputs.release == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          name: ${{ steps.version.outputs.version }}
+          generate_release_notes: true

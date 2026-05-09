@@ -1,0 +1,15 @@
+# SPDX-FileCopyrightText: 2026 nickytd
+# SPDX-License-Identifier: Apache-2.0
+
+FROM golang:1.26 AS builder
+
+WORKDIR /src
+COPY . .
+RUN go mod download && cd tools && go mod download
+RUN make build-watcher
+
+FROM quay.io/brancz/kube-rbac-proxy:v0.22.0 AS kube-rbac-proxy-watcher
+
+COPY --from=builder /src/bin/watcher /usr/bin/watcher
+
+ENTRYPOINT ["/usr/bin/watcher"]

@@ -1,0 +1,24 @@
+# Stage 1: Build the Go app
+FROM golang:1.26 AS builder
+
+# Set up the working directory
+WORKDIR /src
+
+# Copy the source code into the container
+COPY . .
+RUN go mod download && cd tools && go mod download
+
+# Build the application
+RUN make build
+
+# Stage 2: Produce the runtime image
+FROM gcr.io/distroless/static:nonroot AS oidc-apps
+
+# Copy the binary from the build stage
+COPY --from=builder /src/bin/oidc-apps /bin/oidc-apps
+
+# Expose the port the app runs on
+EXPOSE 10250
+
+# Command to run the application
+ENTRYPOINT ["/bin/oidc-apps"]

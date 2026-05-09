@@ -1,0 +1,78 @@
+global:
+  httpRoutes:
+    enabled: true
+  oauth2Proxy:
+  kubeRbacProxy:
+  domainName: "example.com"
+targets:
+  - name: "nginx-target"
+    labels:
+      foo: bar
+      bar: baz
+    labelSelector:
+      matchLabels:
+        app: nginx-target
+    ingress:
+      create: true
+      ingressClassName: "nginx"
+      annotations:
+        nginx.ingress.kubernetes.io/rewrite-target: /
+  - name: "nginx-target-skip-ingress"
+    labelSelector:
+      matchLabels:
+        app: nginx-target-skip-ingress
+    ingress:
+      create: false
+  - name: "nginx-target-with-oauth2-redirect"
+    labels:
+      foo.bar/baz: qux
+    oauth2Proxy:
+      redirectUrl: "https://custom.redirect.url/oauth2/callback"
+    labelSelector:
+      matchLabels:
+        app: nginx-target-with-oauth2-redirect
+    ingress:
+      create: true
+      ingressClassName: "nginx"
+  - name: "nginx-target-httproute"
+    labels:
+      httproute: enabled
+    labelSelector:
+      matchLabels:
+        app: nginx-target-httproute
+    ingress:
+      create: false
+    httproute:
+      create: true
+      parentRefs:
+        - name: "test-gateway"
+          namespace: "default"
+          sectionName: "https"
+  - name: "nginx-target-httproute-skip"
+    labelSelector:
+      matchLabels:
+        app: nginx-target-httproute-skip
+    ingress:
+      create: false
+    httproute:
+      create: false
+  - name: "nginx-target-default-path"
+    labelSelector:
+      matchLabels:
+        app: nginx-target-default-path
+    ingress:
+      create: true
+      ingressClassName: "nginx"
+      defaultPath: "/select/vmui"
+  - name: "nginx-target-httproute-default-path"
+    labelSelector:
+      matchLabels:
+        app: nginx-target-httproute-default-path
+    ingress:
+      create: false
+    httpRoute:
+      create: true
+      defaultPath: "/dashboard"
+      parentRefs:
+        - name: "test-gateway"
+          namespace: "default"

@@ -1,0 +1,620 @@
+// SPDX-FileCopyrightText: 2026 nickytd
+// SPDX-License-Identifier: Apache-2.0
+
+package e2e
+
+import (
+	"strings"
+
+	admissionv1 "k8s.io/api/admissionregistration/v1"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/envtest"
+
+	"github.com/nickytd/oidc-apps/pkg/constants"
+	"github.com/nickytd/oidc-apps/pkg/randutils"
+)
+
+const (
+	defaultNamespace           = "default"
+	target                     = "nginx-target"
+	nonTarget                  = "nginx-non-target"
+	skipIngressTarget          = "nginx-target-skip-ingress"
+	redirectURLTarget          = "nginx-target-with-oauth2-redirect"
+	httpRouteTarget            = "nginx-target-httproute"
+	httpRouteSkipTarget        = "nginx-target-httproute-skip"
+	defaultPathTarget          = "nginx-target-default-path"
+	httpRouteDefaultPathTarget = "nginx-target-httproute-default-path"
+	nginxPod                   = "nginx-pod"
+	nginxRS                    = "nginx-rs"
+	domain                     = "example.com"
+)
+
+func installWebHooks(env *envtest.Environment) {
+	env.WebhookInstallOptions = envtest.WebhookInstallOptions{
+		MutatingWebhooks: []*admissionv1.MutatingWebhookConfiguration{
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "oidc-apps-controller-pods.oidc-apps.io",
+				},
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "MutatingWebhookConfiguration",
+					APIVersion: "admissionregistration.k8s.io/v1",
+				},
+				Webhooks: []admissionv1.MutatingWebhook{
+					{
+						Name: "oidc-apps-deployments.oidc-apps.io",
+						Rules: []admissionv1.RuleWithOperations{
+							{
+								Operations: []admissionv1.OperationType{"CREATE", "UPDATE"},
+								Rule: admissionv1.Rule{
+									APIGroups:   []string{""},
+									APIVersions: []string{"v1"},
+									Resources:   []string{"pods"},
+									Scope:       new(admissionv1.NamespacedScope),
+								},
+							},
+						},
+						FailurePolicy: new(admissionv1.Fail),
+						MatchPolicy:   new(admissionv1.Equivalent),
+						SideEffects:   new(admissionv1.SideEffectClassNone),
+						ClientConfig: admissionv1.WebhookClientConfig{
+							Service: &admissionv1.ServiceReference{
+								Name:      "webhook-service",
+								Namespace: defaultNamespace,
+								Path:      new(constants.PodWebHookPath),
+							},
+						},
+						AdmissionReviewVersions: []string{"v1"},
+						TimeoutSeconds:          new(int32(20)),
+					},
+				},
+			},
+		},
+	}
+}
+
+func createTargetDeployments() []*appsv1.Deployment {
+	// Create a list of deployments with the target label
+	deployments := []*appsv1.Deployment{
+		{
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: "apps/v1",
+				Kind:       "Deployment",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      target,
+				Namespace: defaultNamespace,
+				Labels:    map[string]string{"app": target},
+			},
+			Spec: appsv1.DeploymentSpec{
+				Selector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{"app": target},
+				},
+				Replicas: new(int32(1)),
+				Template: corev1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{
+						Labels: map[string]string{"app": target},
+					},
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name:  "nginx",
+								Image: "nginx:latest",
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: "apps/v1",
+				Kind:       "Deployment",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      skipIngressTarget,
+				Namespace: defaultNamespace,
+				Labels:    map[string]string{"app": skipIngressTarget},
+			},
+			Spec: appsv1.DeploymentSpec{
+				Selector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{"app": skipIngressTarget},
+				},
+				Replicas: new(int32(1)),
+				Template: corev1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{
+						Labels: map[string]string{"app": skipIngressTarget},
+					},
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name:  "nginx",
+								Image: "nginx:latest",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	return deployments
+}
+
+func hash5(obj client.ObjectKey) string {
+	// Create a hash from the object name
+	return randutils.GenerateSha256(strings.Join([]string{obj.Name, obj.Namespace}, "-"))
+}
+
+func createReplicaSet(owner client.Object) *appsv1.ReplicaSet {
+	return &appsv1.ReplicaSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      strings.Join([]string{nginxRS, hash5(client.ObjectKeyFromObject(owner))}, "-"),
+			Namespace: defaultNamespace,
+			OwnerReferences: []metav1.OwnerReference{
+				*metav1.NewControllerRef(owner, appsv1.SchemeGroupVersion.WithKind("Deployment")),
+			},
+		},
+		Spec: appsv1.ReplicaSetSpec{
+			Replicas: new(int32(1)),
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{"app": hash5(client.ObjectKeyFromObject(owner))},
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{"app": hash5(client.ObjectKeyFromObject(owner))},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:  "nginx",
+							Image: "nginx:latest",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func createPod(owner client.Object) *corev1.Pod {
+	return &corev1.Pod{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "v1",
+			Kind:       "Pod",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      strings.Join([]string{nginxPod, hash5(client.ObjectKeyFromObject(owner))}, "-"),
+			Namespace: defaultNamespace,
+			OwnerReferences: []metav1.OwnerReference{
+				*metav1.NewControllerRef(owner, appsv1.SchemeGroupVersion.WithKind("ReplicaSet")),
+			},
+			Labels: map[string]string{"app": "nginx"},
+		},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				{
+					Name:  "nginx",
+					Image: "nginx:latest",
+				},
+			},
+		},
+	}
+}
+
+func createNonTargetDeployment() *appsv1.Deployment {
+	return &appsv1.Deployment{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "apps/v1",
+			Kind:       "Deployment",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      nonTarget,
+			Namespace: defaultNamespace,
+			Labels:    map[string]string{"app": nonTarget},
+		},
+		Spec: appsv1.DeploymentSpec{
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{"app": nonTarget},
+			},
+			Replicas: new(int32(1)),
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{"app": nonTarget},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:  "nginx",
+							Image: "nginx:latest",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func createRedirectTargetDeployment() *appsv1.Deployment {
+	return &appsv1.Deployment{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "apps/v1",
+			Kind:       "Deployment",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      redirectURLTarget,
+			Namespace: defaultNamespace,
+			Labels:    map[string]string{"app": redirectURLTarget},
+		},
+		Spec: appsv1.DeploymentSpec{
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{"app": redirectURLTarget},
+			},
+			Replicas: new(int32(1)),
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{"app": redirectURLTarget},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:  "nginx",
+							Image: "nginx:latest",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func createTargetStatefulSet() *appsv1.StatefulSet {
+	return &appsv1.StatefulSet{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "apps/v1",
+			Kind:       "StatefulSet",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      target,
+			Namespace: defaultNamespace,
+			Labels:    map[string]string{"app": target},
+		},
+		Spec: appsv1.StatefulSetSpec{
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{"app": target},
+			},
+			Replicas: new(int32(2)),
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{"app": target},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:  "nginx",
+							Image: "nginx:latest",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func createTargetStatefulSetWithCustomRedirectURL() *appsv1.StatefulSet {
+	return &appsv1.StatefulSet{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "apps/v1",
+			Kind:       "StatefulSet",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      redirectURLTarget,
+			Namespace: defaultNamespace,
+			Labels:    map[string]string{"app": redirectURLTarget},
+		},
+		Spec: appsv1.StatefulSetSpec{
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{"app": redirectURLTarget},
+			},
+			Replicas: new(int32(2)),
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{"app": redirectURLTarget},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:  "nginx",
+							Image: "nginx:latest",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func createTargetSkipIngressStatefulSet() *appsv1.StatefulSet {
+	return &appsv1.StatefulSet{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "apps/v1",
+			Kind:       "StatefulSet",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      skipIngressTarget,
+			Namespace: defaultNamespace,
+			Labels:    map[string]string{"app": skipIngressTarget},
+		},
+		Spec: appsv1.StatefulSetSpec{
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{"app": skipIngressTarget},
+			},
+			Replicas: new(int32(2)),
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{"app": skipIngressTarget},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:  "nginx",
+							Image: "nginx:latest",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func createStatefulSetPod(owner client.Object, index string) *corev1.Pod {
+	return &corev1.Pod{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "v1",
+			Kind:       "Pod",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      strings.Join([]string{nginxPod, index}, "-"),
+			Namespace: defaultNamespace,
+			Labels: map[string]string{
+				"app":                                target,
+				"statefulset.kubernetes.io/pod-name": strings.Join([]string{nginxPod, index}, "-"),
+			},
+			OwnerReferences: []metav1.OwnerReference{
+				*metav1.NewControllerRef(owner, appsv1.SchemeGroupVersion.WithKind("StatefulSet")),
+			},
+		},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				{
+					Name:  "nginx",
+					Image: "nginx:latest",
+				},
+			},
+		},
+	}
+}
+
+func createSkipIngressStatefulSetPod(owner client.Object, index string) *corev1.Pod {
+	return &corev1.Pod{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "v1",
+			Kind:       "Pod",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      strings.Join([]string{nginxPod, index}, "-"),
+			Namespace: defaultNamespace,
+			Labels: map[string]string{
+				"app":                                skipIngressTarget,
+				"statefulset.kubernetes.io/pod-name": strings.Join([]string{nginxPod, index}, "-"),
+			},
+			OwnerReferences: []metav1.OwnerReference{
+				*metav1.NewControllerRef(owner, appsv1.SchemeGroupVersion.WithKind("StatefulSet")),
+			},
+		},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				{
+					Name:  "nginx",
+					Image: "nginx:latest",
+				},
+			},
+		},
+	}
+}
+
+func createHTTPRouteTargetDeployment() *appsv1.Deployment {
+	return &appsv1.Deployment{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "apps/v1",
+			Kind:       "Deployment",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      httpRouteTarget,
+			Namespace: defaultNamespace,
+			Labels:    map[string]string{"app": httpRouteTarget},
+		},
+		Spec: appsv1.DeploymentSpec{
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{"app": httpRouteTarget},
+			},
+			Replicas: new(int32(1)),
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{"app": httpRouteTarget},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:  "nginx",
+							Image: "nginx:latest",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func createHTTPRouteSkipTargetDeployment() *appsv1.Deployment {
+	return &appsv1.Deployment{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "apps/v1",
+			Kind:       "Deployment",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      httpRouteSkipTarget,
+			Namespace: defaultNamespace,
+			Labels:    map[string]string{"app": httpRouteSkipTarget},
+		},
+		Spec: appsv1.DeploymentSpec{
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{"app": httpRouteSkipTarget},
+			},
+			Replicas: new(int32(1)),
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{"app": httpRouteSkipTarget},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:  "nginx",
+							Image: "nginx:latest",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func createHTTPRouteTargetStatefulSet() *appsv1.StatefulSet {
+	return &appsv1.StatefulSet{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "apps/v1",
+			Kind:       "StatefulSet",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      httpRouteTarget,
+			Namespace: defaultNamespace,
+			Labels:    map[string]string{"app": httpRouteTarget},
+		},
+		Spec: appsv1.StatefulSetSpec{
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{"app": httpRouteTarget},
+			},
+			Replicas: new(int32(2)),
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{"app": httpRouteTarget},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:  "nginx",
+							Image: "nginx:latest",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func createHTTPRouteStatefulSetPod(owner client.Object, index string) *corev1.Pod {
+	return &corev1.Pod{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "v1",
+			Kind:       "Pod",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      strings.Join([]string{nginxPod, index}, "-"),
+			Namespace: defaultNamespace,
+			Labels: map[string]string{
+				"app":                                httpRouteTarget,
+				"statefulset.kubernetes.io/pod-name": strings.Join([]string{nginxPod, index}, "-"),
+			},
+			OwnerReferences: []metav1.OwnerReference{
+				*metav1.NewControllerRef(owner, appsv1.SchemeGroupVersion.WithKind("StatefulSet")),
+			},
+		},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				{
+					Name:  "nginx",
+					Image: "nginx:latest",
+				},
+			},
+		},
+	}
+}
+
+func createDefaultPathTargetDeployment() *appsv1.Deployment {
+	return &appsv1.Deployment{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "apps/v1",
+			Kind:       "Deployment",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      defaultPathTarget,
+			Namespace: defaultNamespace,
+			Labels:    map[string]string{"app": defaultPathTarget},
+		},
+		Spec: appsv1.DeploymentSpec{
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{"app": defaultPathTarget},
+			},
+			Replicas: new(int32(1)),
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{"app": defaultPathTarget},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:  "nginx",
+							Image: "nginx:latest",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func createHTTPRouteDefaultPathTargetDeployment() *appsv1.Deployment {
+	return &appsv1.Deployment{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "apps/v1",
+			Kind:       "Deployment",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      httpRouteDefaultPathTarget,
+			Namespace: defaultNamespace,
+			Labels:    map[string]string{"app": httpRouteDefaultPathTarget},
+		},
+		Spec: appsv1.DeploymentSpec{
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{"app": httpRouteDefaultPathTarget},
+			},
+			Replicas: new(int32(1)),
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{"app": httpRouteDefaultPathTarget},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:  "nginx",
+							Image: "nginx:latest",
+						},
+					},
+				},
+			},
+		},
+	}
+}

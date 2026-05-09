@@ -60,6 +60,12 @@ jobs:
           git commit -m "chore: bump chart appVersion to ${{ steps.version.outputs.version }}"
           git push
 
+      - name: Push Helm chart as OCI artifact
+        if: steps.version.outputs.release == 'true'
+        run: |
+          helm package charts/oidc-apps
+          helm push oidc-apps-*.tgz oci://ghcr.io/nickytd/oidc-apps/charts
+
       - name: Build and push Docker images
         if: steps.version.outputs.release == 'true'
         run: |

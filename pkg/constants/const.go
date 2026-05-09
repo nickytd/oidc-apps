@@ -1,0 +1,64 @@
+// SPDX-FileCopyrightText: 2026 nickytd
+// SPDX-License-Identifier: Apache-2.0
+
+package constants
+
+const (
+	// AnnotationHostKey is the annotation key designating the target domain of the upstream workload
+	AnnotationHostKey = "oidc-application-controller/host"
+	// AnnotationTargetKey is the porotocl, port tuples of the upstream work; protocol=http, port=3000
+	AnnotationTargetKey = "oidc-application-controller/target"
+	// AnnotationKey depicts that the workload is enriched by the controller
+	AnnotationKey = "oidc-application-controller/component"
+	// AnnotationSuffixKey holds the name suffix of the mounted confguration secrets
+	AnnotationSuffixKey = "oidc-application-controller/suffix"
+	// AnnotationOauth2SecertCehcksumKey holds the checksum of the ouath2 proxy confguration secret
+	AnnotationOauth2SecertCehcksumKey = "oidc-application-controller/oauth2-secret-checksum"
+	// PodWebHookPath is the context path of the mutating webhook for pods
+	PodWebHookPath = "/oidc-mutate-v1-pod"
+	// VpaWebHookPath is the context path of the mutating webhook for pods
+	VpaWebHookPath = "/oidc-mutate-v1-vpa"
+	// NAMESPACE is the name of the required environment variable
+	NAMESPACE = "NAMESPACE"
+
+	// ContainerNameOauth2Proxy is the name of the oauth2-proxy container
+	ContainerNameOauth2Proxy = "oauth2-proxy"
+	// ContainerNameKubeRbacProxy is the name of the kube-rbac-proxy container
+	ContainerNameKubeRbacProxy = "kube-rbac-proxy"
+	// SecretNameOauth2Proxy is the name of the kube-rbac-proxy container
+	SecretNameOauth2Proxy = "oauth2-proxy" // #nosec G101 -- This is a false positive
+	// SecretNameResourceAttributes is the name of the resource attributes secret
+	SecretNameResourceAttributes = "resource-attributes"
+	// SecretNameKubeconfig is the name of the kubeconfig secret
+	SecretNameKubeconfig = "kubeconfig"
+	// SecretNameOidcCa is the name of the oidc ca secret
+	SecretNameOidcCa = "oidc-ca"
+	// ServiceNameOauth2Service is the name of the oauth2 service
+	ServiceNameOauth2Service = "oauth2-service"
+	// IngressName is the name of the oauth2 ingress
+	IngressName = "oauth2-ingress"
+	// HTTPRouteName is the name of the oauth2 HTTPRoute
+	HTTPRouteName = "oauth2-httproute"
+
+	// LabelKey is the label added to dependent configuration secrets
+	LabelKey = "oidc-application-controller/component"
+	// LabelValue is the label added to dependent configuration secrets
+	LabelValue = "oidc-apps"
+	// SecretLabelKey is the label added to dependent configuration secrets
+	SecretLabelKey = "oidc-application-controller/secret"
+	// Oauth2LabelValue is the value of the Label
+	Oauth2LabelValue = "oauth2"
+	// RbacLabelValue is the value of the Label
+	RbacLabelValue = "rbac"
+	// OidcCa2LabelValue is the value of the Label
+	OidcCa2LabelValue = "oidc-ca"
+	// KubeconfigLabelValue is the value of the Label
+	KubeconfigLabelValue = "kubeconfig"
+	// RegistrySecretLabelValue is the value of the Label
+	RegistrySecretLabelValue = "registry-secret"
+
+	// Oauth2VolumeName is the volume name of the oauth2-proxy configuration
+	Oauth2VolumeName = "oauth2-proxy"
+	// KubeRbacProxyVolumeName is the volume name of the kube-rbac-proxy configuration
+	KubeRbacProxyVolumeName = "kube-rbac-proxy"
+)

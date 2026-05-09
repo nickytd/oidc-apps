@@ -1,0 +1,7 @@
+authorization:
+  resourceAttributes:
+    apiGroup: authorization.oidc-apps.io
+    apiVersion: v1alpha1
+    resource: oidc-apps
+    subresource: "..."
+    namespace: "..."

@@ -11,11 +11,14 @@ on:
   workflow_dispatch:
 
 jobs:
-  release:
+  prepare:
     runs-on: ubuntu-latest
     permissions:
       contents: write
       packages: write
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      release: ${{ steps.version.outputs.release }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -36,12 +39,6 @@ jobs:
       - name: Skip if dev version
         if: steps.version.outputs.release == 'false'
         run: echo "Version ${{ steps.version.outputs.version }} is a dev version, skipping release."
-
-      - name: Setup Go
-        if: steps.version.outputs.release == 'true'
-        uses: actions/setup-go@v6
-        with:
-          go-version-file: 'go.mod'
 
       - name: Login to GHCR
         if: steps.version.outputs.release == 'true'
@@ -67,27 +64,112 @@ jobs:
           helm package charts/oidc-apps
           helm push oidc-apps-*.tgz oci://ghcr.io/nickytd/oidc-apps/charts
 
+  build:
+    needs: prepare
+    if: needs.prepare.outputs.release == 'true'
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            platform: linux/amd64
+            suffix: amd64
+          - runner: ubuntu-24.04-arm
+            platform: linux/arm64
+            suffix: arm64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Login to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Build and push Docker images
-        if: steps.version.outputs.release == 'true'
         run: |
-          make docker-images
-          docker tag ghcr.io/nickytd/oidc-apps/oidc-apps:latest ghcr.io/nickytd/oidc-apps/oidc-apps:${{ steps.version.outputs.version }}
-          docker tag ghcr.io/nickytd/oidc-apps/kube-rbac-proxy:latest ghcr.io/nickytd/oidc-apps/kube-rbac-proxy:${{ steps.version.outputs.version }}
-          docker push ghcr.io/nickytd/oidc-apps/oidc-apps:latest
-          docker push ghcr.io/nickytd/oidc-apps/oidc-apps:${{ steps.version.outputs.version }}
-          docker push ghcr.io/nickytd/oidc-apps/kube-rbac-proxy:latest
-          docker push ghcr.io/nickytd/oidc-apps/kube-rbac-proxy:${{ steps.version.outputs.version }}
+          VERSION=${{ needs.prepare.outputs.version }}
+
+          docker build \
+            --platform ${{ matrix.platform }} \
+            --tag ghcr.io/nickytd/oidc-apps/oidc-apps:${VERSION}-${{ matrix.suffix }} \
+            -f Dockerfile.oidc-apps .
+          docker push ghcr.io/nickytd/oidc-apps/oidc-apps:${VERSION}-${{ matrix.suffix }}
+
+          docker build \
+            --platform ${{ matrix.platform }} \
+            --tag ghcr.io/nickytd/oidc-apps/kube-rbac-proxy:${VERSION}-${{ matrix.suffix }} \
+            -f Dockerfile.watcher .
+          docker push ghcr.io/nickytd/oidc-apps/kube-rbac-proxy:${VERSION}-${{ matrix.suffix }}
+
+  manifest:
+    needs: [prepare, build]
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    steps:
+      - name: Login to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create and push multi-platform manifests
+        run: |
+          VERSION=${{ needs.prepare.outputs.version }}
+
+          docker manifest create ghcr.io/nickytd/oidc-apps/oidc-apps:${VERSION} \
+            ghcr.io/nickytd/oidc-apps/oidc-apps:${VERSION}-amd64 \
+            ghcr.io/nickytd/oidc-apps/oidc-apps:${VERSION}-arm64
+          docker manifest push ghcr.io/nickytd/oidc-apps/oidc-apps:${VERSION}
+
+          docker manifest create ghcr.io/nickytd/oidc-apps/oidc-apps:latest \
+            ghcr.io/nickytd/oidc-apps/oidc-apps:${VERSION}-amd64 \
+            ghcr.io/nickytd/oidc-apps/oidc-apps:${VERSION}-arm64
+          docker manifest push ghcr.io/nickytd/oidc-apps/oidc-apps:latest
+
+          docker manifest create ghcr.io/nickytd/oidc-apps/kube-rbac-proxy:${VERSION} \
+            ghcr.io/nickytd/oidc-apps/kube-rbac-proxy:${VERSION}-amd64 \
+            ghcr.io/nickytd/oidc-apps/kube-rbac-proxy:${VERSION}-arm64
+          docker manifest push ghcr.io/nickytd/oidc-apps/kube-rbac-proxy:${VERSION}
+
+          docker manifest create ghcr.io/nickytd/oidc-apps/kube-rbac-proxy:latest \
+            ghcr.io/nickytd/oidc-apps/kube-rbac-proxy:${VERSION}-amd64 \
+            ghcr.io/nickytd/oidc-apps/kube-rbac-proxy:${VERSION}-arm64
+          docker manifest push ghcr.io/nickytd/oidc-apps/kube-rbac-proxy:latest
+
+  release:
+    needs: [prepare, manifest]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Pull latest changes
+        run: git pull origin main
 
       - name: Create git tag
-        if: steps.version.outputs.release == 'true'
         run: |
-          git tag -a "${{ steps.version.outputs.version }}" -m "Release ${{ steps.version.outputs.version }}"
-          git push origin "${{ steps.version.outputs.version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "${{ needs.prepare.outputs.version }}" -m "Release ${{ needs.prepare.outputs.version }}"
+          git push origin "${{ needs.prepare.outputs.version }}"
 
       - name: Create GitHub Release
-        if: steps.version.outputs.release == 'true'
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: ${{ steps.version.outputs.version }}
-          name: ${{ steps.version.outputs.version }}
+          tag_name: ${{ needs.prepare.outputs.version }}
+          name: ${{ needs.prepare.outputs.version }}
           generate_release_notes: true

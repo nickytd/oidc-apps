@@ -64,6 +64,8 @@ jobs:
         if: steps.version.outputs.release == 'true'
         run: |
           make docker-images
+          docker tag ghcr.io/nickytd/oidc-apps/oidc-apps:latest ghcr.io/nickytd/oidc-apps/oidc-apps:${{ steps.version.outputs.version }}
+          docker tag ghcr.io/nickytd/oidc-apps/kube-rbac-proxy:latest ghcr.io/nickytd/oidc-apps/kube-rbac-proxy:${{ steps.version.outputs.version }}
           docker push ghcr.io/nickytd/oidc-apps/oidc-apps:latest
           docker push ghcr.io/nickytd/oidc-apps/oidc-apps:${{ steps.version.outputs.version }}
           docker push ghcr.io/nickytd/oidc-apps/kube-rbac-proxy:latest

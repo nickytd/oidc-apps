@@ -1,0 +1,31 @@
+replicas: 1
+
+global:
+  oauth2Proxy:
+    scope: "openid email profile"
+    clientId: "grafana"
+    clientSecret: "grafana-secret"
+    oidcIssuerUrl: "https://dex.127.0.0.1.nip.io"
+    sslInsecureSkipVerify: true
+    insecureOidcSkipIssuerVerification: true
+  oidcCABundle: "OIDC_CA_BUNDLE_PLACEHOLDER"
+  domainName: "127.0.0.1.nip.io"
+  httpRoutes:
+    enabled: true
+
+targets:
+  - name: grafana
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: monitoring
+    labelSelector:
+      matchLabels:
+        app: grafana
+    targetPort: 3000
+    targetProtocol: http
+    httpRoute:
+      create: true
+      parentRefs:
+        - name: oidc-apps-gateway
+          namespace: default
+          sectionName: https

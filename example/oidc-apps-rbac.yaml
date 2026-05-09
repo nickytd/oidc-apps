@@ -1,0 +1,24 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: oidc-apps:system:oidc-apps-operators
+rules:
+  - apiGroups: ["authorization.oidc-apps.io"]
+    resources:
+      - oidc-apps/grafana
+      - oidc-apps/prometheus
+    verbs: ["get", "create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: oidc-apps:system:oidc-apps-operators
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: oidc-apps:system:oidc-apps-operators
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: oidc-apps-operator

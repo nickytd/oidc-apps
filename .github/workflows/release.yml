@@ -58,7 +58,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add charts/oidc-apps/Chart.yaml
-          git commit -m "chore: bump chart appVersion to ${{ steps.version.outputs.version }}"
+          git diff --cached --quiet || git commit -m "chore: bump chart appVersion to ${{ steps.version.outputs.version }}"
           git push
 
       - name: Push Helm chart as OCI artifact

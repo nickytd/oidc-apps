@@ -1,0 +1,47 @@
+version: "2"
+run:
+  concurrency: 4
+  go: "1.26"
+linters:
+  enable: # set of linters in addition to the default set (https://golangci-lint.run/usage/linters/#enabled-by-default)
+    - gocritic
+    - nlreturn
+    - revive
+    - whitespace
+    - wsl_v5
+  settings:
+    revive: # default set https://github.com/mgechev/revive/blob/master/defaults.toml
+      enable-all-rules: true
+      rules:
+        - name: add-constant
+          disabled: true
+        - name: cognitive-complexity
+          disabled: true
+        - name: cyclomatic
+          disabled: true
+        - name: dot-imports
+          disabled: true
+        - name: function-length
+          disabled: true
+        - name: line-length-limit
+          disabled: true
+        - name: max-public-structs
+          arguments:
+            - 10
+        - name: package-comments
+          disabled: true
+        - name: use-errors-new
+          disabled: true
+    wsl_v5:
+      allow-whole-block: true
+      branch-max-lines: 2
+formatters:
+  enable:
+    - gci
+    - gofmt
+  settings:
+    gci:
+      sections:
+        - standard
+        - default
+        - prefix(github.com/nickytd/oidc-apps)

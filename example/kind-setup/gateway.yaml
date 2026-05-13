@@ -5,22 +5,39 @@ metadata:
   name: envoy
 spec:
   controllerName: gateway.envoyproxy.io/gatewayclass-controller
+  parametersRef:
+    group: gateway.envoyproxy.io
+    kind: EnvoyProxy
+    name: kind-proxy-config
+    namespace: envoy-gateway-system
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyProxy
+metadata:
+  name: kind-proxy-config
+  namespace: envoy-gateway-system
+spec:
+  provider:
+    type: Kubernetes
+    kubernetes:
+      envoyService:
+        type: NodePort
 ---
 apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway
 metadata:
-  name: oidc-apps-gateway
-  namespace: default
+  name: dex-gateway
+  namespace: dex
 spec:
   gatewayClassName: envoy
   listeners:
     - name: https
       protocol: HTTPS
-      port: 443
+      port: 5556
       tls:
         mode: Terminate
         certificateRefs:
-          - name: wildcard-tls
+          - name: dex-tls
       allowedRoutes:
         namespaces:
           from: All
@@ -32,8 +49,8 @@ metadata:
   namespace: dex
 spec:
   parentRefs:
-    - name: oidc-apps-gateway
-      namespace: default
+    - name: dex-gateway
+      namespace: dex
   hostnames:
     - dex.127.0.0.1.nip.io
   rules:

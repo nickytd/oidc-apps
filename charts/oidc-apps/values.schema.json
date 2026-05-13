@@ -281,12 +281,133 @@
     "global": {
       "type": "object",
       "properties": {
-        "httpRoutes": {
+        "gateway": {
           "type": "object",
+          "description": "Gateway API configuration",
           "properties": {
-            "enabled": {
+            "httpRoutes": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "description": "Enable Gateway API HTTPRoute support"
+                }
+              }
+            },
+            "managed": {
               "type": "boolean",
-              "description": "Enable Gateway API HTTPRoute support"
+              "description": "When true, the controller creates and manages a Gateway resource"
+            },
+            "name": {
+              "type": "string",
+              "description": "Name of the managed Gateway"
+            },
+            "gatewayClassName": {
+              "type": "string",
+              "description": "GatewayClass to reference (required when managed is true)"
+            },
+            "listeners": {
+              "type": "array",
+              "description": "Listeners for the managed Gateway",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "hostname": {
+                    "type": "string"
+                  },
+                  "port": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 65535
+                  },
+                  "protocol": {
+                    "type": "string"
+                  },
+                  "tls": {
+                    "type": "object",
+                    "properties": {
+                      "mode": {
+                        "type": "string"
+                      },
+                      "certificateRefs": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "group": {
+                              "type": "string"
+                            },
+                            "kind": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "namespace": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["name"]
+                        }
+                      },
+                      "options": {
+                        "type": "object",
+                        "additionalProperties": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  },
+                  "allowedRoutes": {
+                    "type": "object",
+                    "properties": {
+                      "namespaces": {
+                        "type": "object",
+                        "properties": {
+                          "from": {
+                            "type": "string",
+                            "enum": ["All", "Same", "Selector"]
+                          },
+                          "selector": {
+                            "type": "object"
+                          }
+                        }
+                      },
+                      "kinds": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "group": {
+                              "type": "string"
+                            },
+                            "kind": {
+                              "type": "string"
+                            }
+                          },
+                          "required": ["kind"]
+                        }
+                      }
+                    }
+                  }
+                },
+                "required": ["name", "port", "protocol"]
+              }
+            },
+            "annotations": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "labels": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
             }
           }
         },

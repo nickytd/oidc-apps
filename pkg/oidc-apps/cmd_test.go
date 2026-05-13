@@ -45,7 +45,7 @@ func TestGatewayAPISchemeMissingScenario(t *testing.T) {
 
 	// Attempting to create an HTTPRoute object without the scheme registered
 	// would fail at runtime. This test documents that the controller only
-	// registers the Gateway API scheme when global.httpRoutes.enabled is true.
+	// registers the Gateway API scheme when global.gateway.httpRoutes.enabled is true.
 
 	// When HTTPRoute support is disabled (default), the controller:
 	// 1. Does not install Gateway API scheme

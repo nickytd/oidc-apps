@@ -43,16 +43,16 @@ clusterRole:
 podAnnotations: {}
 
 podSecurityContext: {}
-# fsGroup: 2000
+# fsGroup: 1000
 
 securityContext:
   allowPrivilegeEscalation: false
-# capabilities:
-#   drop:
-#   - ALL
-# readOnlyRootFilesystem: true
-# runAsNonRoot: true
-# runAsUser: 1000
+  capabilities:
+    drop:
+    - ALL
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 1000
 
 service:
   type: ClusterIP
@@ -110,6 +110,7 @@ nodeSelector: {}
 tolerations: []
 affinity: {}
 
+# The webhook configuration allows to filter which resources are watched by the controller and trigger reconciliations.
 webhook:
   objectSelector: {}
   namespaceSelector: {}
@@ -122,11 +123,34 @@ cacheSelectorStr:
 # OIDC Apps Extension Configuration
 # Cluster-wide extension conf
 global:
-  # HTTPRoutes global configuration for Gateway API HTTPRoute support
-  # When enabled, the controller registers Gateway API scheme and watches HTTPRoute resources
-  # Requires Gateway API CRDs to be installed in the cluster
-  httpRoutes:
-    enabled: false
+  # Gateway API configuration
+  # Parent section for all Gateway API related settings
+  gateway:
+    # HTTPRoutes configuration for Gateway API HTTPRoute support
+    # When enabled, the controller registers Gateway API scheme and watches HTTPRoute resources
+    # Requires Gateway API CRDs to be installed in the cluster
+    httpRoutes:
+      enabled: false
+    # When managed is true, the controller creates and maintains a Gateway resource
+    managed: false
+    name: "oidc-apps-gateway"
+    gatewayClassName: ""
+    listeners: []
+    #  - name: https
+    #    hostname: "*.example.com"
+    #    port: 443
+    #    protocol: HTTPS
+    #    tls:
+    #      mode: Terminate
+    #      certificateRefs:
+    #        - name: wildcard-tls
+    #    allowedRoutes:
+    #      namespaces:
+    #        from: All
+    #      kinds:
+    #        - kind: HTTPRoute
+    annotations: {}
+    labels: {}
 
   # OIDC Provider Configuration shared by all targets in the cluster
   # All fields can be overwritten by a concrete target
@@ -204,7 +228,7 @@ targets:
       ingressClassName:
       # Default redirect path. When set, requests to "/" are redirected to this path (e.g. "/select/vmui")
       defaultPath:
-    # Target HTTPRoute entry-point (alternative to ingress, requires global.httpRoutes.enabled: true)
+    # Target HTTPRoute entry-point (alternative to ingress, requires global.gateway.httpRoutes.enabled: true)
     # Note: Each target can override global oauth2Proxy, kubeRbacProxy, labels, annotations,
     # domainName, oidcCABundle, and oidcCASecretRef configurations
     httpRoute:

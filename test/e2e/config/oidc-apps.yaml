@@ -1,6 +1,18 @@
 global:
-  httpRoutes:
-    enabled: true
+  gateway:
+    httpRoutes:
+      enabled: true
+    managed: true
+    name: "test-managed-gateway"
+    gatewayClassName: "test-gateway-class"
+    listeners:
+      - name: https
+        port: 443
+        protocol: HTTPS
+        hostname: "*.example.com"
+        allowedRoutes:
+          namespaces:
+            from: All
   oauth2Proxy:
   kubeRbacProxy:
   domainName: "example.com"
@@ -76,3 +88,13 @@ targets:
       parentRefs:
         - name: "test-gateway"
           namespace: "default"
+  - name: "nginx-target-httproute-managed-gw"
+    labels:
+      httproute: managed-gateway
+    labelSelector:
+      matchLabels:
+        app: nginx-target-httproute-managed-gw
+    ingress:
+      create: false
+    httpRoute:
+      create: true

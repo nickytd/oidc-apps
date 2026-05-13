@@ -437,6 +437,7 @@ func getOIDCProxyContainer(pod *corev1.PodSpec, owner client.Object) corev1.Cont
 			"--reverse-proxy=true",
 			"--skip-provider-button=true",
 			"--skip-jwt-bearer-tokens=true",
+			"--approval-prompt=auto",
 			"--upstream=http://127.0.0.1:8100"},
 		SecurityContext: &corev1.SecurityContext{
 			Capabilities:             &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}},

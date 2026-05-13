@@ -499,7 +499,7 @@ var _ = Describe("Cookie Secret Deterministic Generation Tests", func() {
 
 			cfg.Global = configuration.Global{
 				DomainName: "example.org",
-				HTTPRoutes: &configuration.HTTPRoutesGlobalConf{Enabled: true},
+				Gateway:    &configuration.GatewayGlobalConf{HTTPRoutes: &configuration.HTTPRoutesConf{Enabled: true}},
 				Oauth2Proxy: &configuration.Oauth2ProxyConfig{
 					ClientID:      "client-id",
 					ClientSecret:  "client-secret",

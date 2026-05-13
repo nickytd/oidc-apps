@@ -20,9 +20,11 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	autoscalerv1 "k8s.io/autoscaler/vertical-pod-autoscaler/pkg/apis/autoscaling.k8s.io/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/util/workqueue"
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -31,6 +33,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
@@ -67,6 +71,9 @@ var (
 var _ = BeforeSuite(func() {
 	// Setup oidc-apps-controller configuration
 	configuration.CreateControllerConfigOrDie(filepath.Join("config", "oidc-apps.yaml"))
+
+	// Set NAMESPACE env var for managed gateway tests
+	Expect(os.Setenv(constants.NAMESPACE, "default")).To(Succeed())
 
 	// The oidc-apps reconcilers require autoscaling.k8s.io/v1 API
 	env = &envtest.Environment{
@@ -207,6 +214,40 @@ var _ = BeforeSuite(func() {
 			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})).
 		Complete(&controllers.StatefulSetReconciler{Client: mgr.GetClient()})
 	Expect(err).ShouldNot(HaveOccurred())
+
+	// Register managed gateway reconciler
+	extensionConfig := configuration.GetOIDCAppsControllerConfig()
+	if extensionConfig.IsManagedGatewayEnabled() {
+		namespace := os.Getenv(constants.NAMESPACE)
+
+		name := constants.ManagedGatewayName
+		if conf := extensionConfig.GetManagedGatewayConf(); conf != nil && conf.Name != "" {
+			name = conf.Name
+		}
+
+		reconciler := &controllers.GatewayReconciler{
+			Client:    mgr.GetClient(),
+			Namespace: namespace,
+			Config:    extensionConfig.GetManagedGatewayConf,
+		}
+
+		err = controllerruntime.NewControllerManagedBy(mgr).
+			Named("managed-gateway").
+			For(&gatewayv1.Gateway{}, builder.WithPredicates(
+				predicate.NewPredicateFuncs(func(object client.Object) bool {
+					v, ok := object.GetLabels()[constants.LabelKey]
+
+					return ok && v == constants.LabelValue
+				}),
+			)).
+			WatchesRawSource(source.Func(func(_ context.Context, q workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
+				q.Add(reconcile.Request{NamespacedName: types.NamespacedName{Name: name, Namespace: namespace}})
+
+				return nil
+			})).
+			Complete(reconciler)
+		Expect(err).ShouldNot(HaveOccurred())
+	}
 
 	// Start the controller-runtime manager
 	go func() {

@@ -20,6 +20,7 @@ import (
 	autoscalerv1 "k8s.io/autoscaler/vertical-pod-autoscaler/pkg/apis/autoscaling.k8s.io/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/scale/scheme/autoscalingv1"
+	"k8s.io/client-go/util/workqueue"
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
@@ -33,6 +34,7 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
@@ -127,12 +129,23 @@ func RunController(ctx context.Context, o *Options) error {
 		}
 	}
 
+	// Add Gateway to cache when managed gateway is enabled
+	if extensionConfig.IsManagedGatewayEnabled() {
+		cacheOptions.ByObject[&gatewayv1.Gateway{}] = cache.ByObject{
+			Label: labels.SelectorFromSet(labels.Set{constants.LabelKey: constants.LabelValue}),
+		}
+	}
+
 	// NAMESPACE is a required environment variable for the oidc-apps-controller certificate manager
 	if !o.useCertManager && os.Getenv(constants.NAMESPACE) == "" {
 		return errors.New("NAMESPACE environment variable is not set")
 	}
 	// NAMESPACE is a required environment variable for the image pull secret reconciler
 	if o.registrySecret != "" && os.Getenv(constants.NAMESPACE) == "" {
+		return errors.New("NAMESPACE environment variable is not set")
+	}
+	// NAMESPACE is a required environment variable for the managed gateway
+	if extensionConfig.IsManagedGatewayEnabled() && os.Getenv(constants.NAMESPACE) == "" {
 		return errors.New("NAMESPACE environment variable is not set")
 	}
 
@@ -181,6 +194,10 @@ func RunController(ctx context.Context, o *Options) error {
 
 	if err := addPrivateRegistrySecretControllers(mgr, o); err != nil {
 		return fmt.Errorf("could not initialize private registry secret manager: %w", err)
+	}
+
+	if err := addManagedGateway(mgr); err != nil {
+		return fmt.Errorf("could not initialize managed gateway: %w", err)
 	}
 
 	if err := addWebhooks(mgr, o); err != nil {
@@ -738,4 +755,41 @@ func HTTPRouteMapFuncForStatefulset(mgr manager.Manager) func(ctx context.Contex
 
 		return nil
 	}
+}
+
+func addManagedGateway(mgr manager.Manager) error {
+	if !extensionConfig.IsManagedGatewayEnabled() {
+		return nil
+	}
+
+	_log.Info("Managed Gateway support enabled")
+
+	namespace := os.Getenv(constants.NAMESPACE)
+
+	name := constants.ManagedGatewayName
+	if conf := extensionConfig.GetManagedGatewayConf(); conf != nil && conf.Name != "" {
+		name = conf.Name
+	}
+
+	reconciler := &controllers.GatewayReconciler{
+		Client:    mgr.GetClient(),
+		Namespace: namespace,
+		Config:    extensionConfig.GetManagedGatewayConf,
+	}
+
+	return controllerruntime.NewControllerManagedBy(mgr).
+		Named("managed-gateway").
+		For(&gatewayv1.Gateway{}, builder.WithPredicates(
+			predicate.NewPredicateFuncs(func(object client.Object) bool {
+				v, ok := object.GetLabels()[constants.LabelKey]
+
+				return ok && v == constants.LabelValue
+			}),
+		)).
+		WatchesRawSource(source.Func(func(_ context.Context, q workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
+			q.Add(reconcile.Request{NamespacedName: types.NamespacedName{Name: name, Namespace: namespace}})
+
+			return nil
+		})).
+		Complete(reconciler)
 }

@@ -39,6 +39,8 @@ const (
 	IngressName = "oauth2-ingress"
 	// HTTPRouteName is the name of the oauth2 HTTPRoute
 	HTTPRouteName = "oauth2-httproute"
+	// ManagedGatewayName is the default name for the controller-managed Gateway resource
+	ManagedGatewayName = "oidc-apps-gateway"
 
 	// LabelKey is the label added to dependent configuration secrets
 	LabelKey = "oidc-application-controller/component"

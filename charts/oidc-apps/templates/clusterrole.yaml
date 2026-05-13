@@ -32,9 +32,14 @@ rules:
     resources: [ "verticalpodautoscalers" ]
     verbs: [ "get", "list", "watch", "update", "patch" ]
   {{- end }}
-  {{- if and .Values.global .Values.global.httpRoutes .Values.global.httpRoutes.enabled }}
+  {{- if and .Values.global .Values.global.gateway .Values.global.gateway.httpRoutes .Values.global.gateway.httpRoutes.enabled }}
   - apiGroups: ["gateway.networking.k8s.io"]
     resources: ["httproutes"]
     verbs: [ "create", "get", "list", "watch", "update", "patch", "delete" ]
+  {{- if .Values.global.gateway.managed }}
+  - apiGroups: ["gateway.networking.k8s.io"]
+    resources: ["gateways"]
+    verbs: [ "create", "get", "list", "watch", "update", "patch", "delete" ]
+  {{- end }}
   {{- end }}
 {{- end }}

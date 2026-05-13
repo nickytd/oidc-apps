@@ -20,10 +20,11 @@ Configuration:
   - Metrics port: {{ .Values.metrics.port }}
 {{- end }}
   - VPA enabled: {{ .Values.vpa.enabled }}
-  - HTTPRoute support: {{ if .Values.global.httpRoutes }}{{ .Values.global.httpRoutes.enabled }}{{ else }}false{{ end }}
+  - HTTPRoute support: {{ if and .Values.global .Values.global.gateway .Values.global.gateway.httpRoutes }}{{ .Values.global.gateway.httpRoutes.enabled }}{{ else }}false{{ end }}
+  - Managed Gateway: {{ if and .Values.global .Values.global.gateway }}{{ .Values.global.gateway.managed }}{{ else }}false{{ end }}
   - cert-manager integration: {{ .Values.certificate.create }}
 
-{{- if and .Values.global.httpRoutes .Values.global.httpRoutes.enabled }}
+{{- if and .Values.global .Values.global.gateway .Values.global.gateway.httpRoutes .Values.global.gateway.httpRoutes.enabled }}
 
 HTTPRoute Support:
   Gateway API HTTPRoute support is enabled. Ensure that Gateway API CRDs are

@@ -171,7 +171,7 @@ func TestTargetConfiguration(t *testing.T) {
 
 func TestHTTPRouteConfiguration(t *testing.T) {
 	extensionConfig := OIDCAppsControllerConfig{
-		Global: Global{HTTPRoutes: &HTTPRoutesGlobalConf{Enabled: true}},
+		Global: Global{Gateway: &GatewayGlobalConf{HTTPRoutes: &HTTPRoutesConf{Enabled: true}}},
 	}
 	g := NewWithT(t)
 	err := yaml.Unmarshal([]byte(configYaml), &extensionConfig)
@@ -199,7 +199,7 @@ func TestHTTPRouteConfiguration(t *testing.T) {
 
 func TestHTTPRouteWithCustomHost(t *testing.T) {
 	extensionConfig := OIDCAppsControllerConfig{
-		Global: Global{HTTPRoutes: &HTTPRoutesGlobalConf{Enabled: true}},
+		Global: Global{Gateway: &GatewayGlobalConf{HTTPRoutes: &HTTPRoutesConf{Enabled: true}}},
 	}
 	g := NewWithT(t)
 	err := yaml.Unmarshal([]byte(configYaml), &extensionConfig)
@@ -224,7 +224,7 @@ func TestHTTPRouteWithCustomHost(t *testing.T) {
 
 func TestTargetWithoutHTTPRoute(t *testing.T) {
 	extensionConfig := OIDCAppsControllerConfig{
-		Global: Global{HTTPRoutes: &HTTPRoutesGlobalConf{Enabled: true}},
+		Global: Global{Gateway: &GatewayGlobalConf{HTTPRoutes: &HTTPRoutesConf{Enabled: true}}},
 	}
 	g := NewWithT(t)
 	err := yaml.Unmarshal([]byte(configYaml), &extensionConfig)
@@ -242,7 +242,7 @@ func TestTargetWithoutHTTPRoute(t *testing.T) {
 }
 
 func TestHTTPRouteDisabledGlobally(t *testing.T) {
-	// Even with HTTPRoute configured in target, it should return false when global.httpRoutes.enabled is false
+	// Even with HTTPRoute configured in target, it should return false when global.gateway.httpRoutes.enabled is false
 	extensionConfig := OIDCAppsControllerConfig{}
 	g := NewWithT(t)
 	err := yaml.Unmarshal([]byte(configYaml), &extensionConfig)
@@ -255,7 +255,7 @@ func TestHTTPRouteDisabledGlobally(t *testing.T) {
 		WithObjects(target).
 		Build()
 
-	// Should return false because global.httpRoutes.enabled is not set (nil)
+	// Should return false because global.gateway.httpRoutes.enabled is not set (nil)
 	g.Expect(extensionConfig.ShallCreateHTTPRoute(target)).To(BeFalse())
 	g.Expect(extensionConfig.IsHTTPRouteEnabled()).To(BeFalse())
 }
@@ -263,19 +263,19 @@ func TestHTTPRouteDisabledGlobally(t *testing.T) {
 func TestIsHTTPRouteEnabled(t *testing.T) {
 	g := NewWithT(t)
 
-	// Test nil HTTPRoutes
+	// Test nil Gateway
 	configNil := &OIDCAppsControllerConfig{}
 	g.Expect(configNil.IsHTTPRouteEnabled()).To(BeFalse())
 
 	// Test HTTPRoutes with enabled=false
 	configDisabled := &OIDCAppsControllerConfig{
-		Global: Global{HTTPRoutes: &HTTPRoutesGlobalConf{Enabled: false}},
+		Global: Global{Gateway: &GatewayGlobalConf{HTTPRoutes: &HTTPRoutesConf{Enabled: false}}},
 	}
 	g.Expect(configDisabled.IsHTTPRouteEnabled()).To(BeFalse())
 
 	// Test HTTPRoutes with enabled=true
 	configEnabled := &OIDCAppsControllerConfig{
-		Global: Global{HTTPRoutes: &HTTPRoutesGlobalConf{Enabled: true}},
+		Global: Global{Gateway: &GatewayGlobalConf{HTTPRoutes: &HTTPRoutesConf{Enabled: true}}},
 	}
 	g.Expect(configEnabled.IsHTTPRouteEnabled()).To(BeTrue())
 }
@@ -284,7 +284,7 @@ func TestHTTPRouteWithEmptyParentRefs(t *testing.T) {
 	// Test that HTTPRoute with empty parentRefs still returns true for ShallCreateHTTPRoute
 	// but logs a warning (the warning is tested implicitly by ensuring the function works)
 	extensionConfig := OIDCAppsControllerConfig{
-		Global: Global{HTTPRoutes: &HTTPRoutesGlobalConf{Enabled: true}},
+		Global: Global{Gateway: &GatewayGlobalConf{HTTPRoutes: &HTTPRoutesConf{Enabled: true}}},
 	}
 	g := NewWithT(t)
 	err := yaml.Unmarshal([]byte(configYaml), &extensionConfig)
@@ -354,7 +354,7 @@ func TestGetIngressDefaultPath(t *testing.T) {
 
 func TestGetHTTPRouteDefaultPath(t *testing.T) {
 	extensionConfig := OIDCAppsControllerConfig{
-		Global: Global{HTTPRoutes: &HTTPRoutesGlobalConf{Enabled: true}},
+		Global: Global{Gateway: &GatewayGlobalConf{HTTPRoutes: &HTTPRoutesConf{Enabled: true}}},
 	}
 	g := NewWithT(t)
 	err := yaml.Unmarshal([]byte(configYaml), &extensionConfig)
@@ -368,6 +368,223 @@ func TestGetHTTPRouteDefaultPath(t *testing.T) {
 
 	g.Expect(extensionConfig.GetHTTPRouteDefaultPath(getDeployment("test-09"))).To(Equal("/dashboard"))
 	g.Expect(extensionConfig.GetHTTPRouteDefaultPath(getDeployment("test-05"))).To(BeEmpty())
+}
+
+func TestGetUpstreamTarget(t *testing.T) {
+	extensionConfig := OIDCAppsControllerConfig{}
+	g := NewWithT(t)
+	err := yaml.Unmarshal([]byte(configYaml), &extensionConfig)
+	g.Expect(err).ShouldNot(HaveOccurred())
+
+	extensionConfig.client = fake.NewClientBuilder().
+		WithObjects(getTestNamespace()).
+		WithObjects(getDeployment("test-02")).
+		WithObjects(getDeployment("test-04")).
+		Build()
+
+	// test-02 has targetProtocol: https and targetPort: 8443
+	g.Expect(extensionConfig.GetUpstreamTarget(getDeployment("test-02"))).To(Equal("protocol=https, port=8443"))
+
+	// test-04 has no targetPort/targetProtocol defined — defaults to http and 0
+	g.Expect(extensionConfig.GetUpstreamTarget(getDeployment("test-04"))).To(Equal("protocol=http, port=0"))
+}
+
+func TestGetOidcCABundle(t *testing.T) {
+	extensionConfig := OIDCAppsControllerConfig{}
+	g := NewWithT(t)
+	err := yaml.Unmarshal([]byte(configYaml), &extensionConfig)
+	g.Expect(err).ShouldNot(HaveOccurred())
+
+	extensionConfig.client = fake.NewClientBuilder().
+		WithObjects(getTestNamespace()).
+		WithObjects(getDeployment("test-04")).
+		WithObjects(getDeployment("test-12")).
+		Build()
+
+	// test-04 uses global oidcCABundle
+	bundle := extensionConfig.GetOidcCABundle(getDeployment("test-04"))
+	g.Expect(bundle).To(Equal("-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----\n"))
+
+	// test-12 has target-level oidcCABundle
+	bundle = extensionConfig.GetOidcCABundle(getDeployment("test-12"))
+	g.Expect(bundle).To(Equal("target-ca-bundle"))
+}
+
+func TestIsManagedGatewayEnabled(t *testing.T) {
+	g := NewWithT(t)
+
+	// Not enabled when gateway is nil
+	configNil := &OIDCAppsControllerConfig{}
+	g.Expect(configNil.IsManagedGatewayEnabled()).To(BeFalse())
+
+	// Not enabled when HTTPRoutes disabled
+	configNoHTTP := &OIDCAppsControllerConfig{
+		Global: Global{Gateway: &GatewayGlobalConf{Managed: true}},
+	}
+	g.Expect(configNoHTTP.IsManagedGatewayEnabled()).To(BeFalse())
+
+	// Enabled when HTTPRoutes enabled AND managed is true
+	configManaged := &OIDCAppsControllerConfig{
+		Global: Global{Gateway: &GatewayGlobalConf{
+			HTTPRoutes:       &HTTPRoutesConf{Enabled: true},
+			Managed:          true,
+			GatewayClassName: "envoy",
+		}},
+	}
+	g.Expect(configManaged.IsManagedGatewayEnabled()).To(BeTrue())
+
+	// Not enabled when HTTPRoutes enabled but managed is false
+	configNotManaged := &OIDCAppsControllerConfig{
+		Global: Global{Gateway: &GatewayGlobalConf{
+			HTTPRoutes: &HTTPRoutesConf{Enabled: true},
+			Managed:    false,
+		}},
+	}
+	g.Expect(configNotManaged.IsManagedGatewayEnabled()).To(BeFalse())
+}
+
+func TestGetManagedGatewayConf(t *testing.T) {
+	g := NewWithT(t)
+
+	configNil := &OIDCAppsControllerConfig{}
+	g.Expect(configNil.GetManagedGatewayConf()).To(BeNil())
+
+	gw := &GatewayGlobalConf{
+		Managed:          true,
+		Name:             "my-gw",
+		GatewayClassName: "envoy",
+	}
+	configWithGW := &OIDCAppsControllerConfig{
+		Global: Global{Gateway: gw},
+	}
+	g.Expect(configWithGW.GetManagedGatewayConf()).To(Equal(gw))
+}
+
+func TestGetHTTPRouteParentRefsManagedGatewayFallback(t *testing.T) {
+	g := NewWithT(t)
+	extensionConfig := OIDCAppsControllerConfig{
+		Global: Global{Gateway: &GatewayGlobalConf{
+			HTTPRoutes: &HTTPRoutesConf{Enabled: true},
+			Managed:    true,
+			Name:       "managed-gw",
+		}},
+	}
+	err := yaml.Unmarshal([]byte(configYaml), &extensionConfig)
+	g.Expect(err).ShouldNot(HaveOccurred())
+
+	// test-11 has HTTPRoute with no parentRefs — should fall back to managed gateway
+	target := getDeployment("test-11")
+	extensionConfig.client = fake.NewClientBuilder().
+		WithObjects(getTestNamespace()).
+		WithObjects(target).
+		Build()
+
+	parentRefs := extensionConfig.GetHTTPRouteParentRefs(target)
+	g.Expect(parentRefs).To(HaveLen(1))
+	g.Expect(parentRefs[0].Name).To(Equal("managed-gw"))
+}
+
+func TestGetHTTPRouteAnnotationsAndLabels(t *testing.T) {
+	extensionConfig := OIDCAppsControllerConfig{
+		Global: Global{Gateway: &GatewayGlobalConf{HTTPRoutes: &HTTPRoutesConf{Enabled: true}}},
+	}
+	g := NewWithT(t)
+	err := yaml.Unmarshal([]byte(configYaml), &extensionConfig)
+	g.Expect(err).ShouldNot(HaveOccurred())
+
+	// test-11 has HTTPRoute annotations and labels
+	target := getDeployment("test-11")
+	extensionConfig.client = fake.NewClientBuilder().
+		WithObjects(getTestNamespace()).
+		WithObjects(target).
+		Build()
+
+	annotations := extensionConfig.GetHTTPRouteAnnotations(target)
+	g.Expect(annotations).To(HaveKeyWithValue("gateway.networking.k8s.io/purpose", "testing"))
+
+	lbls := extensionConfig.GetHTTPRouteLabels(target)
+	g.Expect(lbls).To(HaveKeyWithValue("route-type", "managed"))
+
+	// test-05 has no annotations or labels on HTTPRoute
+	target05 := getDeployment("test-05")
+	extensionConfig.client = fake.NewClientBuilder().
+		WithObjects(getTestNamespace()).
+		WithObjects(target05).
+		Build()
+
+	g.Expect(extensionConfig.GetHTTPRouteAnnotations(target05)).To(BeNil())
+	g.Expect(extensionConfig.GetHTTPRouteLabels(target05)).To(BeNil())
+}
+
+func TestGetIngressAnnotationsAndLabels(t *testing.T) {
+	extensionConfig := OIDCAppsControllerConfig{}
+	g := NewWithT(t)
+	err := yaml.Unmarshal([]byte(configYaml), &extensionConfig)
+	g.Expect(err).ShouldNot(HaveOccurred())
+
+	// test-10 has ingress annotations and labels
+	target := getDeployment("test-10")
+	extensionConfig.client = fake.NewClientBuilder().
+		WithObjects(getTestNamespace()).
+		WithObjects(target).
+		Build()
+
+	annotations := extensionConfig.GetIngressAnnotations(target)
+	g.Expect(annotations).To(HaveLen(2))
+	g.Expect(annotations).To(HaveKeyWithValue("nginx.ingress.kubernetes.io/rewrite-target", "/"))
+	g.Expect(annotations).To(HaveKeyWithValue("cert-manager.io/cluster-issuer", "letsencrypt"))
+
+	lbls := extensionConfig.GetIngressLabels(target)
+	g.Expect(lbls).To(HaveLen(2))
+	g.Expect(lbls).To(HaveKeyWithValue("app.kubernetes.io/component", "ingress"))
+	g.Expect(lbls).To(HaveKeyWithValue("environment", "production"))
+
+	// test-04 has no ingress — should return nil
+	target04 := getDeployment("test-04")
+	extensionConfig.client = fake.NewClientBuilder().
+		WithObjects(getTestNamespace()).
+		WithObjects(target04).
+		Build()
+
+	g.Expect(extensionConfig.GetIngressAnnotations(target04)).To(BeNil())
+	g.Expect(extensionConfig.GetIngressLabels(target04)).To(BeNil())
+}
+
+func TestGetIngressClassName(t *testing.T) {
+	extensionConfig := OIDCAppsControllerConfig{}
+	g := NewWithT(t)
+	err := yaml.Unmarshal([]byte(configYaml), &extensionConfig)
+	g.Expect(err).ShouldNot(HaveOccurred())
+
+	extensionConfig.client = fake.NewClientBuilder().
+		WithObjects(getTestNamespace()).
+		WithObjects(getDeployment("test-10")).
+		WithObjects(getDeployment("test-02")).
+		Build()
+
+	g.Expect(extensionConfig.GetIngressClassName(getDeployment("test-10"))).To(Equal("nginx"))
+	g.Expect(extensionConfig.GetIngressClassName(getDeployment("test-02"))).To(BeEmpty())
+}
+
+func TestGetRedirectURLWithHTTPRoute(t *testing.T) {
+	extensionConfig := OIDCAppsControllerConfig{
+		Global: Global{Gateway: &GatewayGlobalConf{HTTPRoutes: &HTTPRoutesConf{Enabled: true}}},
+	}
+	g := NewWithT(t)
+	err := yaml.Unmarshal([]byte(configYaml), &extensionConfig)
+	g.Expect(err).ShouldNot(HaveOccurred())
+
+	// test-06 has httpRoute with host "custom.httproute.host" but no explicit redirectUrl
+	target := getDeployment("test-06")
+	extensionConfig.client = fake.NewClientBuilder().
+		WithObjects(getTestNamespace()).
+		WithObjects(target).
+		Build()
+
+	// GetRedirectURL falls through to https://{GetHost}/oauth2/callback
+	// GetHost uses ingress.Host (not httpRoute.Host), so it falls back to default
+	redirectURL := extensionConfig.GetRedirectURL(target)
+	g.Expect(redirectURL).To(Equal("https://test-06-test.domain.org/oauth2/callback"))
 }
 
 func TestIsValidDefaultPath(t *testing.T) {

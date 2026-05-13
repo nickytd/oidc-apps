@@ -139,3 +139,51 @@ targets:
       parentRefs:
         - name: "my-gateway"
           namespace: "gateway-system"
+
+  # A target with ingress annotations and labels
+  - name: test-10
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: test
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/name: test-10
+    targetPort: 3000
+    ingress:
+      create: true
+      annotations:
+        nginx.ingress.kubernetes.io/rewrite-target: "/"
+        cert-manager.io/cluster-issuer: "letsencrypt"
+      labels:
+        app.kubernetes.io/component: "ingress"
+        environment: "production"
+      tlsSecretRef:
+        name: "ingress-tls"
+      ingressClassName: "nginx"
+
+  # A target with HTTPRoute annotations, labels and managed gateway fallback
+  - name: test-11
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: test
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/name: test-11
+    targetPort: 8080
+    httpRoute:
+      create: true
+      hostPrefix: "test-11-prefix"
+      annotations:
+        gateway.networking.k8s.io/purpose: "testing"
+      labels:
+        route-type: "managed"
+
+  # A target with oidcCABundle at target level
+  - name: test-12
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: test
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/name: test-12
+    oidcCABundle: dGFyZ2V0LWNhLWJ1bmRsZQ==

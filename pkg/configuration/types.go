@@ -37,14 +37,20 @@ type Global struct {
 
 // Oauth2ProxyConfig OIDC Provider configuration
 type Oauth2ProxyConfig struct {
-	Scope                              string `json:"scope,omitzero"`
-	ClientID                           string `json:"clientId"`
-	ClientSecret                       string `json:"clientSecret,omitzero"` // #nosec G117
-	RedirectURL                        string `json:"redirectUrl"`
-	OidcIssuerURL                      string `json:"oidcIssuerUrl"`
-	SSLInsecureSkipVerify              *bool  `json:"sslInsecureSkipVerify,omitzero"`
-	InsecureOidcSkipIssuerVerification *bool  `json:"insecureOidcSkipIssuerVerification,omitzero"`
-	InsecureOidcSkipNonce              *bool  `json:"insecureOidcSkipNonce,omitzero"`
+	Scope                              string   `json:"scope,omitzero"`
+	ClientID                           string   `json:"clientId"`
+	ClientSecret                       string   `json:"clientSecret,omitzero"` // #nosec G117
+	RedirectURL                        string   `json:"redirectUrl"`
+	OidcIssuerURL                      string   `json:"oidcIssuerUrl"`
+	SSLInsecureSkipVerify              *bool    `json:"sslInsecureSkipVerify,omitzero"`
+	InsecureOidcSkipIssuerVerification *bool    `json:"insecureOidcSkipIssuerVerification,omitzero"`
+	InsecureOidcSkipNonce              *bool    `json:"insecureOidcSkipNonce,omitzero"`
+	ApprovalPrompt                     string   `json:"approvalPrompt,omitzero"`
+	CookieRefresh                      string   `json:"cookieRefresh,omitzero"`
+	EmailDomain                        string   `json:"emailDomain,omitzero"`
+	SkipProviderButton                 *bool    `json:"skipProviderButton,omitzero"`
+	CodeChallengeMethod                string   `json:"codeChallengeMethod,omitzero"`
+	ExtraArgs                          []string `json:"extraArgs,omitzero"`
 }
 
 // KubeRbacProxyConfig kube-rbac-proxy configuration

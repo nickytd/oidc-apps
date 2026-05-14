@@ -187,3 +187,99 @@ func (c *OIDCAppsControllerConfig) GetInsecureOidcSkipNonce(object client.Object
 
 	return false
 }
+
+// GetApprovalPrompt returns the OIDC approval prompt mode for the given workload target
+func (c *OIDCAppsControllerConfig) GetApprovalPrompt(object client.Object) string {
+	t := c.FetchTarget(object)
+	if t.Oauth2Proxy != nil &&
+		t.Oauth2Proxy.ApprovalPrompt != "" {
+		return t.Oauth2Proxy.ApprovalPrompt
+	}
+
+	if c.Global.Oauth2Proxy != nil &&
+		c.Global.Oauth2Proxy.ApprovalPrompt != "" {
+		return c.Global.Oauth2Proxy.ApprovalPrompt
+	}
+
+	return "auto"
+}
+
+// GetCookieRefresh returns the oauth2-proxy cookie refresh interval for the given workload target
+func (c *OIDCAppsControllerConfig) GetCookieRefresh(object client.Object) string {
+	t := c.FetchTarget(object)
+	if t.Oauth2Proxy != nil &&
+		t.Oauth2Proxy.CookieRefresh != "" {
+		return t.Oauth2Proxy.CookieRefresh
+	}
+
+	if c.Global.Oauth2Proxy != nil &&
+		c.Global.Oauth2Proxy.CookieRefresh != "" {
+		return c.Global.Oauth2Proxy.CookieRefresh
+	}
+
+	return "3600s"
+}
+
+// GetEmailDomain returns the email domain restriction for the given workload target
+func (c *OIDCAppsControllerConfig) GetEmailDomain(object client.Object) string {
+	t := c.FetchTarget(object)
+	if t.Oauth2Proxy != nil &&
+		t.Oauth2Proxy.EmailDomain != "" {
+		return t.Oauth2Proxy.EmailDomain
+	}
+
+	if c.Global.Oauth2Proxy != nil &&
+		c.Global.Oauth2Proxy.EmailDomain != "" {
+		return c.Global.Oauth2Proxy.EmailDomain
+	}
+
+	return "*"
+}
+
+// GetSkipProviderButton returns whether to skip the oauth2-proxy provider selection button
+func (c *OIDCAppsControllerConfig) GetSkipProviderButton(object client.Object) bool {
+	t := c.FetchTarget(object)
+	if t.Oauth2Proxy != nil &&
+		t.Oauth2Proxy.SkipProviderButton != nil {
+		return ptr.Deref(t.Oauth2Proxy.SkipProviderButton, true)
+	}
+
+	if c.Global.Oauth2Proxy != nil &&
+		c.Global.Oauth2Proxy.SkipProviderButton != nil {
+		return ptr.Deref(c.Global.Oauth2Proxy.SkipProviderButton, true)
+	}
+
+	return true
+}
+
+// GetCodeChallengeMethod returns the PKCE code challenge method for the given workload target
+func (c *OIDCAppsControllerConfig) GetCodeChallengeMethod(object client.Object) string {
+	t := c.FetchTarget(object)
+	if t.Oauth2Proxy != nil &&
+		t.Oauth2Proxy.CodeChallengeMethod != "" {
+		return t.Oauth2Proxy.CodeChallengeMethod
+	}
+
+	if c.Global.Oauth2Proxy != nil &&
+		c.Global.Oauth2Proxy.CodeChallengeMethod != "" {
+		return c.Global.Oauth2Proxy.CodeChallengeMethod
+	}
+
+	return "S256"
+}
+
+// GetExtraArgs returns extra CLI arguments for oauth2-proxy for the given workload target
+func (c *OIDCAppsControllerConfig) GetExtraArgs(object client.Object) []string {
+	t := c.FetchTarget(object)
+	if t.Oauth2Proxy != nil &&
+		len(t.Oauth2Proxy.ExtraArgs) > 0 {
+		return t.Oauth2Proxy.ExtraArgs
+	}
+
+	if c.Global.Oauth2Proxy != nil &&
+		len(c.Global.Oauth2Proxy.ExtraArgs) > 0 {
+		return c.Global.Oauth2Proxy.ExtraArgs
+	}
+
+	return nil
+}

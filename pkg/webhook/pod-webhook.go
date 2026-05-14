@@ -63,7 +63,7 @@ func (p *PodMutator) Handle(ctx context.Context, req webhook.AdmissionRequest) w
 
 	patch := pod.DeepCopy()
 	clientID := configuration.GetOIDCAppsControllerConfig().GetClientID(owner)
-	ussuerURL := configuration.GetOIDCAppsControllerConfig().GetOidcIssuerURL(owner)
+	issuerURL := configuration.GetOIDCAppsControllerConfig().GetOidcIssuerURL(owner)
 	upstream := configuration.GetOIDCAppsControllerConfig().GetUpstreamTarget(owner)
 	upstreamURL := buildUpstreamURL(upstream, patch.Spec)
 	suffix := fetchTargetSuffix(owner)
@@ -129,7 +129,7 @@ func (p *PodMutator) Handle(ctx context.Context, req webhook.AdmissionRequest) w
 	addProxyContainer(constants.ContainerNameOauth2Proxy, &patch.Spec, getOIDCProxyContainer(_log, &patch.Spec, owner))
 
 	// Add the kube-rbac-proxy sidecar to the pod template
-	addProxyContainer(constants.ContainerNameKubeRbacProxy, &patch.Spec, getKubeRbacProxyContainer(clientID, ussuerURL, upstreamURL, patch, owner))
+	addProxyContainer(constants.ContainerNameKubeRbacProxy, &patch.Spec, getKubeRbacProxyContainer(clientID, issuerURL, upstreamURL, patch, owner))
 
 	// Add image pull secret if the proxy container images are served from private registry
 	if len(p.ImagePullSecret) > 0 {

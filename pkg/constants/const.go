@@ -10,10 +10,10 @@ const (
 	AnnotationTargetKey = "oidc-application-controller/target"
 	// AnnotationKey depicts that the workload is enriched by the controller
 	AnnotationKey = "oidc-application-controller/component"
-	// AnnotationSuffixKey holds the name suffix of the mounted confguration secrets
+	// AnnotationSuffixKey holds the name suffix of the mounted configuration secrets
 	AnnotationSuffixKey = "oidc-application-controller/suffix"
-	// AnnotationOauth2SecertCehcksumKey holds the checksum of the ouath2 proxy confguration secret
-	AnnotationOauth2SecertCehcksumKey = "oidc-application-controller/oauth2-secret-checksum"
+	// AnnotationOauth2SecretChecksumKey holds the checksum of the oauth2 proxy configuration secret
+	AnnotationOauth2SecretChecksumKey = "oidc-application-controller/oauth2-secret-checksum"
 	// PodWebHookPath is the context path of the mutating webhook for pods
 	PodWebHookPath = "/oidc-mutate-v1-pod"
 	// VpaWebHookPath is the context path of the mutating webhook for pods

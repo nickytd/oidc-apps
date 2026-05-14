@@ -169,6 +169,67 @@ func TestTargetConfiguration(t *testing.T) {
 	g.Expect(extensionConfig.GetKubeSecretName(target)).To(Equal("target-kubeconfig"))
 }
 
+func TestOauth2ProxyOptionsGlobalFallback(t *testing.T) {
+	extensionConfig := OIDCAppsControllerConfig{}
+	g := NewWithT(t)
+	err := yaml.Unmarshal([]byte(configYaml), &extensionConfig)
+	g.Expect(err).ShouldNot(HaveOccurred())
+
+	// test-04 has no per-target oauth2Proxy config — should use global values
+	target := getDeployment("test-04")
+	extensionConfig.client = fake.NewClientBuilder().
+		WithObjects(getTestNamespace()).
+		WithObjects(target).
+		Build()
+
+	g.Expect(extensionConfig.GetApprovalPrompt(target)).To(Equal("force"))
+	g.Expect(extensionConfig.GetCookieRefresh(target)).To(Equal("1800s"))
+	g.Expect(extensionConfig.GetEmailDomain(target)).To(Equal("example.org"))
+	g.Expect(extensionConfig.GetSkipProviderButton(target)).To(BeFalse())
+	g.Expect(extensionConfig.GetCodeChallengeMethod(target)).To(Equal("S256"))
+	g.Expect(extensionConfig.GetExtraArgs(target)).To(Equal([]string{"--silence-ping-logging=true"}))
+}
+
+func TestOauth2ProxyOptionsTargetOverride(t *testing.T) {
+	extensionConfig := OIDCAppsControllerConfig{}
+	g := NewWithT(t)
+	err := yaml.Unmarshal([]byte(configYaml), &extensionConfig)
+	g.Expect(err).ShouldNot(HaveOccurred())
+
+	// test-02 has per-target overrides
+	target := getDeployment("test-02")
+	extensionConfig.client = fake.NewClientBuilder().
+		WithObjects(getTestNamespace()).
+		WithObjects(target).
+		Build()
+
+	g.Expect(extensionConfig.GetApprovalPrompt(target)).To(Equal("auto"))
+	g.Expect(extensionConfig.GetCookieRefresh(target)).To(Equal("900s"))
+	g.Expect(extensionConfig.GetEmailDomain(target)).To(Equal("target.org"))
+	g.Expect(extensionConfig.GetSkipProviderButton(target)).To(BeTrue())
+	g.Expect(extensionConfig.GetCodeChallengeMethod(target)).To(Equal("plain"))
+	g.Expect(extensionConfig.GetExtraArgs(target)).To(Equal([]string{"--set-xauthrequest=true", "--set-authorization-header=true"}))
+}
+
+func TestOauth2ProxyOptionsDefaults(t *testing.T) {
+	extensionConfig := OIDCAppsControllerConfig{}
+	g := NewWithT(t)
+
+	// Empty config — should return defaults
+	target := getDeployment("test-04")
+	extensionConfig.client = fake.NewClientBuilder().
+		WithObjects(getTestNamespace()).
+		WithObjects(target).
+		Build()
+
+	g.Expect(extensionConfig.GetApprovalPrompt(target)).To(Equal("auto"))
+	g.Expect(extensionConfig.GetCookieRefresh(target)).To(Equal("3600s"))
+	g.Expect(extensionConfig.GetEmailDomain(target)).To(Equal("*"))
+	g.Expect(extensionConfig.GetSkipProviderButton(target)).To(BeTrue())
+	g.Expect(extensionConfig.GetCodeChallengeMethod(target)).To(Equal("S256"))
+	g.Expect(extensionConfig.GetExtraArgs(target)).To(BeNil())
+}
+
 func TestHTTPRouteConfiguration(t *testing.T) {
 	extensionConfig := OIDCAppsControllerConfig{
 		Global: Global{Gateway: &GatewayGlobalConf{HTTPRoutes: &HTTPRoutesConf{Enabled: true}}},

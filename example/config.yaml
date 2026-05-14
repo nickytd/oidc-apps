@@ -20,6 +20,18 @@ global:
     sslInsecureSkipVerify: false
     insecureOidcSkipIssuerVerification: false
     insecureOidcSkipNonce: false
+    # Controls whether the OIDC provider shows the consent screen (auto/force)
+    approvalPrompt: "auto"
+    # Session cookie refresh interval
+    cookieRefresh: "3600s"
+    # Restrict access to specific email domains (* for any)
+    emailDomain: "*"
+    # Show/hide the provider selection button
+    skipProviderButton: true
+    # PKCE code challenge method (S256/plain)
+    codeChallengeMethod: "S256"
+    # Additional CLI arguments passed verbatim to oauth2-proxy
+    extraArgs: []
   kubeRbacProxy:
     # kubeConfig used by kube-rbac-proxy to create SubjectAccessReview authorizing incoming requests
     # A string that will be marshaled to a clientcmd.Config https://pkg.go.dev/k8s.io/client-go/tools/clientcmd/api/v1#Config

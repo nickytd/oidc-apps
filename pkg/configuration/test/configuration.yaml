@@ -6,6 +6,13 @@ global:
     clientSecret: "client-secret"
     redirectUrl: "https://app.org/oauth2/callback"
     oidcIssuerUrl: "https://oidc-provider.org"
+    approvalPrompt: "force"
+    cookieRefresh: "1800s"
+    emailDomain: "example.org"
+    skipProviderButton: false
+    codeChallengeMethod: "S256"
+    extraArgs:
+      - "--silence-ping-logging=true"
   kubeRbacProxy:
     kubeConfigStr: Imt1YmVjb25maWci
     kubeSecretRef:
@@ -42,6 +49,14 @@ targets:
       sslInsecureSkipVerify: true
       insecureOidcSkipIssuerVerification: true
       insecureOidcSkipNonce: true
+      approvalPrompt: "auto"
+      cookieRefresh: "900s"
+      emailDomain: "target.org"
+      skipProviderButton: true
+      codeChallengeMethod: "plain"
+      extraArgs:
+        - "--set-xauthrequest=true"
+        - "--set-authorization-header=true"
     kubeRbacProxy:
       kubeConfigStr: a3ViZWNvbmZpZy10YXJnZXQK
       kubeSecretRef:

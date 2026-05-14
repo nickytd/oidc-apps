@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -91,9 +92,7 @@ func (g *GatewayReconciler) reconcileGateway(ctx context.Context, conf *configur
 		gw.Labels = map[string]string{
 			constants.LabelKey: constants.LabelValue,
 		}
-		for k, v := range conf.Labels {
-			gw.Labels[k] = v
-		}
+		maps.Copy(gw.Labels, conf.Labels)
 
 		gw.Annotations = conf.Annotations
 		gw.Spec = gatewayv1.GatewaySpec{

@@ -544,6 +544,136 @@ var _ = Describe("Cookie Secret Deterministic Generation Tests", func() {
 		})
 	})
 
+	Context("when extraArgs are configured with valid and invalid entries", func() {
+		var (
+			deployment      *appsv1.Deployment
+			replicaSet      *appsv1.ReplicaSet
+			pod             *corev1.Pod
+			localPodWebhook *webhook.PodMutator
+			savedGlobal     configuration.Global
+			savedTargets    []configuration.Target
+		)
+
+		BeforeEach(func() {
+			deployment = &appsv1.Deployment{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "apps/v1",
+					Kind:       "Deployment",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "nginx",
+					Namespace: "nginx",
+					Labels:    map[string]string{"app": "nginx"},
+					UID:       "deployment-uid-extraargs",
+				},
+			}
+			replicaSet = &appsv1.ReplicaSet{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "apps/v1",
+					Kind:       "ReplicaSet",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "nginx-rs-0001",
+					Namespace: "nginx",
+					UID:       "replicaset-uid-extraargs",
+					OwnerReferences: []metav1.OwnerReference{
+						{
+							APIVersion: "apps/v1",
+							Kind:       "Deployment",
+							Name:       "nginx",
+							UID:        "deployment-uid-extraargs",
+						},
+					},
+				},
+			}
+			pod = &corev1.Pod{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "v1",
+					Kind:       "Pod",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "nginx-pod-1",
+					Namespace: "nginx",
+					UID:       "pod-uid-extraargs",
+					OwnerReferences: []metav1.OwnerReference{
+						{
+							APIVersion: "apps/v1",
+							Kind:       "ReplicaSet",
+							Name:       "nginx-rs-0001",
+							UID:        "replicaset-uid-extraargs",
+						},
+					},
+				},
+			}
+
+			s := runtime.NewScheme()
+			err := scheme.AddToScheme(s)
+			Expect(err).NotTo(HaveOccurred())
+
+			fakeClient := fake.NewClientBuilder().
+				WithScheme(s).
+				WithObjects(deployment, replicaSet, pod).
+				Build()
+
+			cfg := configuration.GetOIDCAppsControllerConfig()
+			savedGlobal = cfg.Global
+			savedTargets = cfg.Targets
+
+			cfg.Global = configuration.Global{
+				DomainName: "example.org",
+				Oauth2Proxy: &configuration.Oauth2ProxyConfig{
+					ClientID:      "client-id",
+					ClientSecret:  "client-secret",
+					OidcIssuerURL: "https://oidc-provider.org",
+					ExtraArgs: []string{
+						"--set-xauthrequest=true",
+						"invalid-no-dashes",
+						"--valid-flag",
+						"not a flag at all",
+					},
+				},
+			}
+			cfg.Targets = []configuration.Target{
+				{
+					Name: "nginx",
+					LabelSelector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{"app": "nginx"},
+					},
+				},
+			}
+			cfg.SetClient(fakeClient)
+
+			localPodWebhook = &webhook.PodMutator{
+				Client:  fakeClient,
+				Decoder: admission.NewDecoder(s),
+			}
+		})
+
+		It("should include valid extraArgs and skip invalid ones", func() {
+			patchedPod := patchPodWithWebhook(pod, localPodWebhook)
+
+			var oauth2Args []string
+			for _, container := range patchedPod.Spec.Containers {
+				if container.Name == constants.ContainerNameOauth2Proxy {
+					oauth2Args = container.Args
+
+					break
+				}
+			}
+
+			Expect(oauth2Args).To(ContainElement("--set-xauthrequest=true"))
+			Expect(oauth2Args).To(ContainElement("--valid-flag"))
+			Expect(oauth2Args).NotTo(ContainElement("invalid-no-dashes"))
+			Expect(oauth2Args).NotTo(ContainElement("not a flag at all"))
+		})
+
+		AfterEach(func() {
+			cfg := configuration.GetOIDCAppsControllerConfig()
+			cfg.Global = savedGlobal
+			cfg.Targets = savedTargets
+		})
+	})
+
 	Context("VPA in-place update scenario integration test", func() {
 		var (
 			deployment      *appsv1.Deployment

@@ -18,41 +18,47 @@ import (
 	"github.com/nickytd/oidc-apps/pkg/randutils"
 )
 
-func createHTTPRouteForDeployment(object client.Object) (gatewayv1.HTTPRoute, error) {
+func httpRouteForDeploymentObject(object client.Object) *gatewayv1.HTTPRoute {
 	suffix := randutils.GenerateSha256(object.GetName() + "-" + object.GetNamespace())
-	host := configuration.GetOIDCAppsControllerConfig().GetHTTPRouteHost(object)
-	parentRefs := configuration.GetOIDCAppsControllerConfig().GetHTTPRouteParentRefs(object)
 
-	httpRoute := gatewayv1.HTTPRoute{
+	return &gatewayv1.HTTPRoute{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      constants.HTTPRouteName + "-" + suffix,
 			Namespace: object.GetNamespace(),
-			Labels: map[string]string{
-				constants.LabelKey: constants.LabelValue,
-			},
 		},
-		Spec: gatewayv1.HTTPRouteSpec{
-			CommonRouteSpec: gatewayv1.CommonRouteSpec{
-				ParentRefs: convertParentRefs(parentRefs, object.GetNamespace()),
-			},
-			Hostnames: []gatewayv1.Hostname{gatewayv1.Hostname(host)},
-			Rules: []gatewayv1.HTTPRouteRule{
-				{
-					Matches: []gatewayv1.HTTPRouteMatch{
-						{
-							Path: &gatewayv1.HTTPPathMatch{
-								Type:  new(gatewayv1.PathMatchPathPrefix),
-								Value: new("/"),
-							},
+	}
+}
+
+func mutateHTTPRouteForDeployment(httpRoute *gatewayv1.HTTPRoute, object client.Object) error {
+	suffix := randutils.GenerateSha256(object.GetName() + "-" + object.GetNamespace())
+	extConfig := configuration.GetOIDCAppsControllerConfig()
+	host := extConfig.GetHTTPRouteHost(object)
+	parentRefs := extConfig.GetHTTPRouteParentRefs(object)
+
+	httpRoute.Labels = map[string]string{
+		constants.LabelKey: constants.LabelValue,
+	}
+	httpRoute.Spec = gatewayv1.HTTPRouteSpec{
+		CommonRouteSpec: gatewayv1.CommonRouteSpec{
+			ParentRefs: convertParentRefs(parentRefs, object.GetNamespace()),
+		},
+		Hostnames: []gatewayv1.Hostname{gatewayv1.Hostname(host)},
+		Rules: []gatewayv1.HTTPRouteRule{
+			{
+				Matches: []gatewayv1.HTTPRouteMatch{
+					{
+						Path: &gatewayv1.HTTPPathMatch{
+							Type:  new(gatewayv1.PathMatchPathPrefix),
+							Value: new("/"),
 						},
 					},
-					BackendRefs: []gatewayv1.HTTPBackendRef{
-						{
-							BackendRef: gatewayv1.BackendRef{
-								BackendObjectReference: gatewayv1.BackendObjectReference{
-									Name: gatewayv1.ObjectName(constants.ServiceNameOauth2Service + "-" + suffix),
-									Port: new(gatewayv1.PortNumber(8080)),
-								},
+				},
+				BackendRefs: []gatewayv1.HTTPBackendRef{
+					{
+						BackendRef: gatewayv1.BackendRef{
+							BackendObjectReference: gatewayv1.BackendObjectReference{
+								Name: gatewayv1.ObjectName(constants.ServiceNameOauth2Service + "-" + suffix),
+								Port: new(gatewayv1.PortNumber(8080)),
 							},
 						},
 					},
@@ -61,61 +67,68 @@ func createHTTPRouteForDeployment(object client.Object) (gatewayv1.HTTPRoute, er
 		},
 	}
 
-	if annotations := configuration.GetOIDCAppsControllerConfig().GetHTTPRouteAnnotations(object); len(annotations) > 0 {
+	if annotations := extConfig.GetHTTPRouteAnnotations(object); len(annotations) > 0 {
 		httpRoute.Annotations = annotations
 	}
 
-	applyHTTPRouteDefaultPathRedirect(&httpRoute, object)
+	applyHTTPRouteDefaultPathRedirect(httpRoute, object)
 
-	extraLabels := configuration.GetOIDCAppsControllerConfig().GetHTTPRouteLabels(object)
+	extraLabels := extConfig.GetHTTPRouteLabels(object)
 	maps.Copy(httpRoute.Labels, extraLabels)
 
-	return httpRoute, nil
+	return nil
 }
 
-func createHTTPRouteForStatefulSetPod(pod *corev1.Pod, object client.Object) (gatewayv1.HTTPRoute, error) {
+func httpRouteForStatefulSetPodObject(pod *corev1.Pod, object client.Object) *gatewayv1.HTTPRoute {
 	suffix := randutils.GenerateSha256(pod.GetName() + "-" + pod.GetNamespace())
-	parentRefs := configuration.GetOIDCAppsControllerConfig().GetHTTPRouteParentRefs(object)
-
-	hostPrefix, ok := pod.GetAnnotations()[constants.AnnotationHostKey]
-	if !ok {
-		return gatewayv1.HTTPRoute{}, fmt.Errorf("host annotation not found in pod %s/%s", pod.GetNamespace(), pod.GetName())
-	}
-
-	host, domain, _ := strings.Cut(hostPrefix, ".")
 	index := fetchStrIndexIfPresent(pod)
-	podHost := fmt.Sprintf("%s-%s.%s", host, index, domain)
 
-	httpRoute := gatewayv1.HTTPRoute{
+	return &gatewayv1.HTTPRoute{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      constants.HTTPRouteName + "-" + addOptionalIndex(index+"-") + suffix,
 			Namespace: object.GetNamespace(),
-			Labels: map[string]string{
-				constants.LabelKey: constants.LabelValue,
-			},
 		},
-		Spec: gatewayv1.HTTPRouteSpec{
-			CommonRouteSpec: gatewayv1.CommonRouteSpec{
-				ParentRefs: convertParentRefs(parentRefs, object.GetNamespace()),
-			},
-			Hostnames: []gatewayv1.Hostname{gatewayv1.Hostname(podHost)},
-			Rules: []gatewayv1.HTTPRouteRule{
-				{
-					Matches: []gatewayv1.HTTPRouteMatch{
-						{
-							Path: &gatewayv1.HTTPPathMatch{
-								Type:  new(gatewayv1.PathMatchPathPrefix),
-								Value: new("/"),
-							},
+	}
+}
+
+func mutateHTTPRouteForStatefulSetPod(httpRoute *gatewayv1.HTTPRoute, pod *corev1.Pod, object client.Object) error {
+	suffix := randutils.GenerateSha256(pod.GetName() + "-" + pod.GetNamespace())
+	extConfig := configuration.GetOIDCAppsControllerConfig()
+	parentRefs := extConfig.GetHTTPRouteParentRefs(object)
+	index := fetchStrIndexIfPresent(pod)
+
+	hostPrefix, ok := pod.GetAnnotations()[constants.AnnotationHostKey]
+	if !ok {
+		return fmt.Errorf("host annotation not found in pod %s/%s", pod.GetNamespace(), pod.GetName())
+	}
+
+	host, domain, _ := strings.Cut(hostPrefix, ".")
+	podHost := fmt.Sprintf("%s-%s.%s", host, index, domain)
+
+	httpRoute.Labels = map[string]string{
+		constants.LabelKey: constants.LabelValue,
+	}
+	httpRoute.Spec = gatewayv1.HTTPRouteSpec{
+		CommonRouteSpec: gatewayv1.CommonRouteSpec{
+			ParentRefs: convertParentRefs(parentRefs, object.GetNamespace()),
+		},
+		Hostnames: []gatewayv1.Hostname{gatewayv1.Hostname(podHost)},
+		Rules: []gatewayv1.HTTPRouteRule{
+			{
+				Matches: []gatewayv1.HTTPRouteMatch{
+					{
+						Path: &gatewayv1.HTTPPathMatch{
+							Type:  new(gatewayv1.PathMatchPathPrefix),
+							Value: new("/"),
 						},
 					},
-					BackendRefs: []gatewayv1.HTTPBackendRef{
-						{
-							BackendRef: gatewayv1.BackendRef{
-								BackendObjectReference: gatewayv1.BackendObjectReference{
-									Name: gatewayv1.ObjectName(constants.ServiceNameOauth2Service + "-" + addOptionalIndex(index+"-") + suffix),
-									Port: new(gatewayv1.PortNumber(8080)),
-								},
+				},
+				BackendRefs: []gatewayv1.HTTPBackendRef{
+					{
+						BackendRef: gatewayv1.BackendRef{
+							BackendObjectReference: gatewayv1.BackendObjectReference{
+								Name: gatewayv1.ObjectName(constants.ServiceNameOauth2Service + "-" + addOptionalIndex(index+"-") + suffix),
+								Port: new(gatewayv1.PortNumber(8080)),
 							},
 						},
 					},
@@ -124,16 +137,16 @@ func createHTTPRouteForStatefulSetPod(pod *corev1.Pod, object client.Object) (ga
 		},
 	}
 
-	if annotations := configuration.GetOIDCAppsControllerConfig().GetHTTPRouteAnnotations(object); len(annotations) > 0 {
+	if annotations := extConfig.GetHTTPRouteAnnotations(object); len(annotations) > 0 {
 		httpRoute.Annotations = annotations
 	}
 
-	applyHTTPRouteDefaultPathRedirect(&httpRoute, object)
+	applyHTTPRouteDefaultPathRedirect(httpRoute, object)
 
-	extraLabels := configuration.GetOIDCAppsControllerConfig().GetHTTPRouteLabels(object)
+	extraLabels := extConfig.GetHTTPRouteLabels(object)
 	maps.Copy(httpRoute.Labels, extraLabels)
 
-	return httpRoute, nil
+	return nil
 }
 
 func applyHTTPRouteDefaultPathRedirect(httpRoute *gatewayv1.HTTPRoute, object client.Object) {
@@ -168,7 +181,6 @@ func applyHTTPRouteDefaultPathRedirect(httpRoute *gatewayv1.HTTPRoute, object cl
 	httpRoute.Spec.Rules = append([]gatewayv1.HTTPRouteRule{redirectRule}, httpRoute.Spec.Rules...)
 }
 
-// convertParentRefs converts configuration parent refs to Gateway API parent refs
 func convertParentRefs(refs []configuration.HTTPRouteParentRef, _ string) []gatewayv1.ParentReference {
 	if len(refs) == 0 {
 		return nil

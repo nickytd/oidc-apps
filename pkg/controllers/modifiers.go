@@ -5,7 +5,6 @@ package controllers
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -13,11 +12,9 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	autoscalerv1 "k8s.io/autoscaler/vertical-pod-autoscaler/pkg/apis/autoscaling.k8s.io/v1"
-	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -26,6 +23,29 @@ import (
 	"github.com/nickytd/oidc-apps/pkg/configuration"
 	"github.com/nickytd/oidc-apps/pkg/constants"
 )
+
+func reconcileOwnedResource(ctx context.Context, c client.Client, owner client.Object, obj client.Object, mutate func() error) error {
+	result, err := controllerutil.CreateOrUpdate(ctx, c, obj, func() error {
+		if err := mutate(); err != nil {
+			return err
+		}
+
+		return controllerutil.SetOwnerReference(owner, obj, c.Scheme())
+	})
+	if err != nil {
+		return err
+	}
+
+	if result != controllerutil.OperationResultNone {
+		log.FromContext(ctx).Info("reconciled resource",
+			"kind", fmt.Sprintf("%T", obj),
+			"name", obj.GetName(),
+			"operation", result,
+		)
+	}
+
+	return nil
+}
 
 func fetchOidcAppsServices(ctx context.Context, c client.Client, object client.Object) (*corev1.ServiceList, error) {
 	oidcService := &corev1.ServiceList{}
@@ -142,101 +162,63 @@ func fetchResourceAttributesNamespace(_ context.Context, _ client.Client, object
 // reconcileDeploymentDependencies is the function responsible for managing authentication & authorization dependencies.
 // It reconciles the needed secrets, ingresses and services.
 func reconcileDeploymentDependencies(ctx context.Context, c client.Client, object *appsv1.Deployment) error {
-	var (
-		// Service for the oauth2-proxy sidecar
-		oauth2Service corev1.Service
-		// Secret with oidc configuration for oauth2-proxy sidecar
-		oauth2Secret corev1.Secret
-		// Secret with resource attributes for the rbac-proxy sidecar
-		rbacSecret corev1.Secret
-		// Secret with oidc CA certificate for the rbac-proxy sidecar
-		oidcCABundleSecret corev1.Secret
-		// Optional secret with kubeconfig the rbac-proxy sidecar
-		kubeConfig corev1.Secret
-		// Error
-		err error
-	)
-
 	if !object.GetDeletionTimestamp().IsZero() {
 		return nil
 	}
 
-	// Create or update the oauth2 secret setting the owner reference
-	if oauth2Secret, err = createOauth2Secret(object); err != nil {
-		return fmt.Errorf("failed to create oauth2 secret: %w", err)
+	// OAuth2 secret
+	oauth2Secret := oauth2SecretObject(object)
+	if err := reconcileOwnedResource(ctx, c, object, oauth2Secret, func() error {
+		return mutateOauth2Secret(oauth2Secret, object)
+	}); err != nil {
+		return fmt.Errorf("failed to reconcile oauth2 secret: %w", err)
 	}
 
-	if err = controllerutil.SetOwnerReference(object, &oauth2Secret, c.Scheme()); err != nil {
-		return fmt.Errorf("failed to set owner reference to oauth secret: %w", err)
-	}
-
-	if err = createOrPatchObject(ctx, c, &oauth2Secret); err != nil {
-		return fmt.Errorf("failed to create or update oauth2 secret: %w", err)
-	}
-
-	// Create or update the oauth2 service setting the owner reference
+	// OAuth2 service
 	selectors := configuration.GetOIDCAppsControllerConfig().GetTargetLabelSelector(object)
-	if oauth2Service, err = createOauth2Service(selectors.MatchLabels, object); err != nil {
-		return fmt.Errorf("failed to create oauth2 service: %w", err)
+
+	oauth2Svc := oauth2ServiceObject(object)
+	if err := reconcileOwnedResource(ctx, c, object, oauth2Svc, func() error {
+		return mutateOauth2Service(oauth2Svc, selectors.MatchLabels)
+	}); err != nil {
+		return fmt.Errorf("failed to reconcile oauth2 service: %w", err)
 	}
 
-	if err := controllerutil.SetOwnerReference(object, &oauth2Service, c.Scheme()); err != nil {
-		return fmt.Errorf("failed to set owner reference to oauth service: %w", err)
-	}
-
-	if err = createOrPatchObject(ctx, c, &oauth2Service); err != nil {
-		return fmt.Errorf("failed to create or update oauth2 service: %w", err)
-	}
-
-	// Create or update the resource attributes secret setting the owner reference
+	// Resource attributes secret
 	ns := fetchResourceAttributesNamespace(ctx, c, object)
-	if rbacSecret, err = createResourceAttributesSecret(object, ns); err != nil {
-		return fmt.Errorf("failed to create resource attributes secret: %w", err)
+
+	rbacSecret := resourceAttributesSecretObject(object)
+	if err := reconcileOwnedResource(ctx, c, object, rbacSecret, func() error {
+		return mutateResourceAttributesSecret(rbacSecret, object, ns)
+	}); err != nil {
+		return fmt.Errorf("failed to reconcile resource attributes secret: %w", err)
 	}
 
-	if err := controllerutil.SetOwnerReference(object, &rbacSecret, c.Scheme()); err != nil {
-		return fmt.Errorf("failed to set owner reference to resource attributes secret: %w", err)
-	}
-
-	if err = createOrPatchObject(ctx, c, &rbacSecret); err != nil {
-		return fmt.Errorf("failed to create or update rbac secret: %w", err)
-	}
-
-	// kubeconfig secret is optionally added to the kube-rbac-proxy
-	if kubeConfig, err = createKubeconfigSecret(object); err != nil && !errors.Is(err, errSecretDoesNotExist) {
-		return fmt.Errorf("failed to create kubeconfig secret: %w", err)
-	}
-
-	if !errors.Is(err, errSecretDoesNotExist) {
-		if err = controllerutil.SetOwnerReference(object, &kubeConfig, c.Scheme()); err != nil {
-			return fmt.Errorf("failed to set owner reference to kubeconfig secret: %w", err)
-		}
-
-		if err = createOrPatchObject(ctx, c, &kubeConfig); err != nil {
-			return fmt.Errorf("failed to create or update kubecofig secret: %w", err)
+	// Optional kubeconfig secret
+	if needsKubeconfigSecret(object) {
+		kubeSecret := kubeconfigSecretObject(object)
+		if err := reconcileOwnedResource(ctx, c, object, kubeSecret, func() error {
+			return mutateKubeconfigSecret(kubeSecret, object)
+		}); err != nil {
+			return fmt.Errorf("failed to reconcile kubeconfig secret: %w", err)
 		}
 	}
 
-	// oidc ca bundle secret is mandatory for the rbac-proxy
-	if oidcCABundleSecret, err = createOidcCaBundleSecret(object); err != nil && !errors.Is(err, errSecretDoesNotExist) {
-		return fmt.Errorf("failed to create oidc ca bundle secret: %w", err)
-	}
-
-	if !errors.Is(err, errSecretDoesNotExist) {
-		if err = controllerutil.SetOwnerReference(object, &oidcCABundleSecret, c.Scheme()); err != nil {
-			return fmt.Errorf("failed to set owner reference to oidc ca bundle secret: %w", err)
-		}
-
-		if err = createOrPatchObject(ctx, c, &oidcCABundleSecret); err != nil {
-			return fmt.Errorf("failed to create or update oidc caBundle secret: %w", err)
+	// Optional OIDC CA bundle secret
+	if needsOidcCaBundleSecret(object) {
+		caSecret := oidcCaBundleSecretObject(object)
+		if err := reconcileOwnedResource(ctx, c, object, caSecret, func() error {
+			return mutateOidcCaBundleSecret(caSecret, object)
+		}); err != nil {
+			return fmt.Errorf("failed to reconcile oidc ca bundle secret: %w", err)
 		}
 	}
 
-	if err = reconcileIngressForDeployment(ctx, c, object); err != nil {
+	if err := reconcileIngressForDeployment(ctx, c, object); err != nil {
 		return err
 	}
 
-	if err = reconcileHTTPRouteForDeployment(ctx, c, object); err != nil {
+	if err := reconcileHTTPRouteForDeployment(ctx, c, object); err != nil {
 		return err
 	}
 
@@ -252,17 +234,11 @@ func reconcileIngressForDeployment(ctx context.Context, c client.Client, object 
 		return nil
 	}
 
-	oauth2Ingress, err := createIngressForDeployment(object)
-	if err != nil {
-		return fmt.Errorf("failed to create oauth2 ingress: %w", err)
-	}
-
-	if err = controllerutil.SetOwnerReference(object, &oauth2Ingress, c.Scheme()); err != nil {
-		return fmt.Errorf("failed to set owner reference to oauth2 ingress: %w", err)
-	}
-
-	if err = createOrPatchObject(ctx, c, &oauth2Ingress); err != nil {
-		return fmt.Errorf("failed to create or update oauth2 ingress: %w", err)
+	ingress := ingressForDeploymentObject(object)
+	if err := reconcileOwnedResource(ctx, c, object, ingress, func() error {
+		return mutateIngressForDeployment(ingress, object)
+	}); err != nil {
+		return fmt.Errorf("failed to reconcile oauth2 ingress: %w", err)
 	}
 
 	return nil
@@ -274,17 +250,11 @@ func reconcileIngressForStatefulSetPod(ctx context.Context, c client.Client, pod
 		return nil
 	}
 
-	oauth2Ingress, err := createIngressForStatefulSetPod(pod, object)
-	if err != nil {
-		return fmt.Errorf("failed to create oauth2 ingress: %w", err)
-	}
-
-	if err = controllerutil.SetOwnerReference(pod, &oauth2Ingress, c.Scheme()); err != nil {
-		return fmt.Errorf("failed to set owner reference to oauth2 ingress: %w", err)
-	}
-
-	if err = createOrPatchObject(ctx, c, &oauth2Ingress); err != nil {
-		return fmt.Errorf("failed to create or update oauth2 ingress: %w", err)
+	ingress := ingressForStatefulSetPodObject(pod, object)
+	if err := reconcileOwnedResource(ctx, c, pod, ingress, func() error {
+		return mutateIngressForStatefulSetPod(ingress, pod, object)
+	}); err != nil {
+		return fmt.Errorf("failed to reconcile oauth2 ingress: %w", err)
 	}
 
 	return nil
@@ -295,17 +265,11 @@ func reconcileHTTPRouteForDeployment(ctx context.Context, c client.Client, objec
 		return nil
 	}
 
-	oauth2HTTPRoute, err := createHTTPRouteForDeployment(object)
-	if err != nil {
-		return fmt.Errorf("failed to create oauth2 httproute: %w", err)
-	}
-
-	if err = controllerutil.SetOwnerReference(object, &oauth2HTTPRoute, c.Scheme()); err != nil {
-		return fmt.Errorf("failed to set owner reference to oauth2 httproute: %w", err)
-	}
-
-	if err = createOrPatchObject(ctx, c, &oauth2HTTPRoute); err != nil {
-		return fmt.Errorf("failed to create or update oauth2 httproute: %w", err)
+	httpRoute := httpRouteForDeploymentObject(object)
+	if err := reconcileOwnedResource(ctx, c, object, httpRoute, func() error {
+		return mutateHTTPRouteForDeployment(httpRoute, object)
+	}); err != nil {
+		return fmt.Errorf("failed to reconcile oauth2 httproute: %w", err)
 	}
 
 	return nil
@@ -317,53 +281,27 @@ func reconcileHTTPRouteForStatefulSetPod(ctx context.Context, c client.Client, p
 		return nil
 	}
 
-	oauth2HTTPRoute, err := createHTTPRouteForStatefulSetPod(pod, object)
-	if err != nil {
-		return fmt.Errorf("failed to create oauth2 httproute: %w", err)
-	}
-
-	if err = controllerutil.SetOwnerReference(pod, &oauth2HTTPRoute, c.Scheme()); err != nil {
-		return fmt.Errorf("failed to set owner reference to oauth2 httproute: %w", err)
-	}
-
-	if err = createOrPatchObject(ctx, c, &oauth2HTTPRoute); err != nil {
-		return fmt.Errorf("failed to create or update oauth2 httproute: %w", err)
+	httpRoute := httpRouteForStatefulSetPodObject(pod, object)
+	if err := reconcileOwnedResource(ctx, c, pod, httpRoute, func() error {
+		return mutateHTTPRouteForStatefulSetPod(httpRoute, pod, object)
+	}); err != nil {
+		return fmt.Errorf("failed to reconcile oauth2 httproute: %w", err)
 	}
 
 	return nil
 }
 
 func reconcileStatefulSetDependencies(ctx context.Context, c client.Client, object *appsv1.StatefulSet) error {
-	var (
-		// Service for the oauth2-proxy sidecar
-		oauth2Service corev1.Service
-		// Secret with oidc configuration for oauth2-proxy sidecar
-		oauth2Secret corev1.Secret
-		// Secret with resource attributes for the rbac-proxy sidecar
-		rbacSecret corev1.Secret
-		// Secret with oidc CA certificate for the rbac-proxy sidecar
-		oidcCABundleSecret corev1.Secret
-		// Optional secret with kubeconfig the rbac-proxy sidecar
-		kubeConfig corev1.Secret
-
-		err error
-	)
-
 	if !object.GetDeletionTimestamp().IsZero() {
 		return nil
 	}
 
-	// Create or update the oauth2 secret setting the owner reference
-	if oauth2Secret, err = createOauth2Secret(object); err != nil {
-		return fmt.Errorf("failed to create oauth2 secret: %w", err)
-	}
-
-	if err = controllerutil.SetOwnerReference(object, &oauth2Secret, c.Scheme()); err != nil {
-		return fmt.Errorf("failed to set owner reference to oauth secret: %w", err)
-	}
-
-	if err = createOrPatchObject(ctx, c, &oauth2Secret); err != nil {
-		return fmt.Errorf("failed to create or update oauth2 secret: %w", err)
+	// OAuth2 secret
+	oauth2Secret := oauth2SecretObject(object)
+	if err := reconcileOwnedResource(ctx, c, object, oauth2Secret, func() error {
+		return mutateOauth2Secret(oauth2Secret, object)
+	}); err != nil {
+		return fmt.Errorf("failed to reconcile oauth2 secret: %w", err)
 	}
 
 	// For each pod in the statefulset
@@ -382,7 +320,7 @@ func reconcileStatefulSetDependencies(ctx context.Context, c client.Client, obje
 			continue
 		}
 
-		// Create or update the oauth2 service setting the owner reference
+		// OAuth2 service per pod
 		selectors := client.MatchingLabels{}
 		if configuration.GetOIDCAppsControllerConfig().GetTargetLabelSelector(&pod) != nil {
 			selectors = configuration.GetOIDCAppsControllerConfig().GetTargetLabelSelector(&pod).MatchLabels
@@ -392,190 +330,54 @@ func reconcileStatefulSetDependencies(ctx context.Context, c client.Client, obje
 			selectors = map[string]string{"statefulset.kubernetes.io/pod-name": statefulSetPodNameLabel}
 		}
 
-		if oauth2Service, err = createOauth2Service(selectors, &pod); err != nil {
-			return fmt.Errorf("failed to create oauth2 service: %w", err)
+		oauth2Svc := oauth2ServiceObject(&pod)
+		if err := reconcileOwnedResource(ctx, c, &pod, oauth2Svc, func() error {
+			return mutateOauth2Service(oauth2Svc, selectors)
+		}); err != nil {
+			return fmt.Errorf("failed to reconcile oauth2 service: %w", err)
 		}
 
-		if err = controllerutil.SetOwnerReference(&pod, &oauth2Service, c.Scheme()); err != nil {
-			return fmt.Errorf("failed to set owner reference to oauth service: %w", err)
-		}
-
-		if err = createOrPatchObject(ctx, c, &oauth2Service); err != nil {
-			return fmt.Errorf("failed to create or update oauth2 service: %w", err)
-		}
-
-		if err = reconcileIngressForStatefulSetPod(ctx, c, &pod, object); err != nil {
+		if err := reconcileIngressForStatefulSetPod(ctx, c, &pod, object); err != nil {
 			return err
 		}
 
-		if err = reconcileHTTPRouteForStatefulSetPod(ctx, c, &pod, object); err != nil {
+		if err := reconcileHTTPRouteForStatefulSetPod(ctx, c, &pod, object); err != nil {
 			return err
 		}
 	}
 
-	// Create or update the resource attributes secret setting the owner reference
+	// Resource attributes secret
 	ns := fetchResourceAttributesNamespace(ctx, c, object)
-	if rbacSecret, err = createResourceAttributesSecret(object, ns); err != nil {
-		return fmt.Errorf("failed to create resource attributes secret: %w", err)
+
+	rbacSecret := resourceAttributesSecretObject(object)
+	if err := reconcileOwnedResource(ctx, c, object, rbacSecret, func() error {
+		return mutateResourceAttributesSecret(rbacSecret, object, ns)
+	}); err != nil {
+		return fmt.Errorf("failed to reconcile resource attributes secret: %w", err)
 	}
 
-	if err = controllerutil.SetOwnerReference(object, &rbacSecret, c.Scheme()); err != nil {
-		return fmt.Errorf("failed to set owner reference to resource attributes secret: %w", err)
-	}
-
-	if err = createOrPatchObject(ctx, c, &rbacSecret); err != nil {
-		return fmt.Errorf("failed to create or update rbac secret: %w", err)
-	}
-
-	// kubeconfig secret is optionally added to the kube-rbac-proxy
-	if kubeConfig, err = createKubeconfigSecret(object); err != nil && !errors.Is(err, errSecretDoesNotExist) {
-		return fmt.Errorf("failed to create kubeconfig secret: %w", err)
-	}
-
-	if !errors.Is(err, errSecretDoesNotExist) {
-		if err = controllerutil.SetOwnerReference(object, &kubeConfig, c.Scheme()); err != nil {
-			return fmt.Errorf("failed to set owner reference to kubeconfig secret: %w", err)
-		}
-
-		if err = createOrPatchObject(ctx, c, &kubeConfig); err != nil {
-			return fmt.Errorf("failed to create or update kubeconfig secret: %w", err)
+	// Optional kubeconfig secret
+	if needsKubeconfigSecret(object) {
+		kubeSecret := kubeconfigSecretObject(object)
+		if err := reconcileOwnedResource(ctx, c, object, kubeSecret, func() error {
+			return mutateKubeconfigSecret(kubeSecret, object)
+		}); err != nil {
+			return fmt.Errorf("failed to reconcile kubeconfig secret: %w", err)
 		}
 	}
 
-	// oidc ca bundle secret is mandatory for the rbac-proxy
-	if oidcCABundleSecret, err = createOidcCaBundleSecret(object); err != nil && !errors.Is(err, errSecretDoesNotExist) {
-		return fmt.Errorf("failed to create oidc ca bundle secret: %w", err)
-	}
-
-	if !errors.Is(err, errSecretDoesNotExist) {
-		if err = controllerutil.SetOwnerReference(object, &oidcCABundleSecret, c.Scheme()); err != nil {
-			return fmt.Errorf("failed to set owner reference to oidc ca bundle secret: %w", err)
-		}
-
-		if err = createOrPatchObject(ctx, c, &oidcCABundleSecret); err != nil {
-			return fmt.Errorf("failed to create or update oidc caBundle secret: %w", err)
+	// Optional OIDC CA bundle secret
+	if needsOidcCaBundleSecret(object) {
+		caSecret := oidcCaBundleSecretObject(object)
+		if err := reconcileOwnedResource(ctx, c, object, caSecret, func() error {
+			return mutateOidcCaBundleSecret(caSecret, object)
+		}); err != nil {
+			return fmt.Errorf("failed to reconcile oidc ca bundle secret: %w", err)
 		}
 	}
 
 	if c.Scheme().IsGroupRegistered("autoscaling.k8s.io") {
 		return patchVpa(ctx, c, object)
-	}
-
-	return nil
-}
-
-func createOrPatchObject(ctx context.Context, c client.Client, patch client.Object) error {
-	// Switch over type
-	switch p := patch.(type) {
-	case *corev1.Secret:
-		return createOrPatchSecret(ctx, c, *p)
-	case *corev1.Service:
-		return createOrPatchService(ctx, c, *p)
-	case *networkingv1.Ingress:
-		return createOrPatchIngress(ctx, c, *p)
-	case *gatewayv1.HTTPRoute:
-		return createOrPatchHTTPRoute(ctx, c, *p)
-	}
-
-	log.FromContext(ctx).Info("unknown object type", "object", patch)
-
-	return nil
-}
-
-func createOrPatchSecret(ctx context.Context, c client.Client, obj corev1.Secret) error {
-	secret := &corev1.Secret{}
-	// Create a secret if it does not exist
-	if err := c.Get(ctx, client.ObjectKeyFromObject(&obj), secret); apierrors.IsNotFound(err) {
-		if err = c.Create(ctx, &obj); err != nil {
-			return fmt.Errorf("failed to create secret: %w", err)
-		}
-
-		return nil
-	}
-
-	// Update the secret
-	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		return c.Update(ctx, &obj)
-	}); err != nil {
-		return fmt.Errorf("failed to update secret: %w", err)
-	}
-
-	return nil
-}
-
-func createOrPatchIngress(ctx context.Context, c client.Client, obj networkingv1.Ingress) error {
-	ingress := &networkingv1.Ingress{}
-
-	// Create an ingress if it does not exist
-	if err := c.Get(ctx, client.ObjectKeyFromObject(&obj), ingress); apierrors.IsNotFound(err) {
-		if err = c.Create(ctx, &obj); err != nil {
-			return fmt.Errorf("failed to create ingress: %w", err)
-		}
-
-		return nil
-	}
-
-	// Update the ingress
-	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		return c.Update(ctx, &obj)
-	}); err != nil {
-		return fmt.Errorf("failed to update ingress: %w", err)
-	}
-
-	return nil
-}
-
-func createOrPatchHTTPRoute(ctx context.Context, c client.Client, obj gatewayv1.HTTPRoute) error {
-	httpRoute := &gatewayv1.HTTPRoute{}
-
-	// Check if HTTPRoute exists
-	err := c.Get(ctx, client.ObjectKeyFromObject(&obj), httpRoute)
-	if apierrors.IsNotFound(err) {
-		// Create an HTTPRoute if it does not exist
-		if err = c.Create(ctx, &obj); err != nil {
-			return fmt.Errorf("failed to create httproute: %w", err)
-		}
-
-		return nil
-	}
-
-	if err != nil {
-		return fmt.Errorf("failed to get httproute: %w", err)
-	}
-
-	// Update the HTTPRoute
-	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		// Re-fetch to get current resourceVersion on each retry
-		if err := c.Get(ctx, client.ObjectKeyFromObject(&obj), httpRoute); err != nil {
-			return err
-		}
-
-		obj.SetResourceVersion(httpRoute.GetResourceVersion())
-
-		return c.Update(ctx, &obj)
-	}); err != nil {
-		return fmt.Errorf("failed to update httproute: %w", err)
-	}
-
-	return nil
-}
-
-func createOrPatchService(ctx context.Context, c client.Client, obj corev1.Service) error {
-	service := &corev1.Service{}
-	// Create a service if it does not exist
-	if err := c.Get(ctx, client.ObjectKeyFromObject(&obj), service); apierrors.IsNotFound(err) {
-		if err = c.Create(ctx, &obj); err != nil {
-			return fmt.Errorf("failed to create service: %w", err)
-		}
-
-		return nil
-	}
-
-	// Update the service
-	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		return c.Update(ctx, &obj)
-	}); err != nil {
-		return fmt.Errorf("failed to update service: %w", err)
 	}
 
 	return nil

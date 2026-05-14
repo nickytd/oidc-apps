@@ -18,43 +18,49 @@ import (
 	"github.com/nickytd/oidc-apps/pkg/randutils"
 )
 
-func createIngressForDeployment(object client.Object) (networkingv1.Ingress, error) {
+func ingressForDeploymentObject(object client.Object) *networkingv1.Ingress {
 	suffix := randutils.GenerateSha256(object.GetName() + "-" + object.GetNamespace())
-	ingressClassName := new(configuration.GetOIDCAppsControllerConfig().GetIngressClassName(object))
-	ingressTLSSecretName := configuration.GetOIDCAppsControllerConfig().GetIngressTLSSecretName(object)
-	host := configuration.GetOIDCAppsControllerConfig().GetHost(object)
 
-	ingress := networkingv1.Ingress{
+	return &networkingv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      constants.IngressName + "-" + suffix,
 			Namespace: object.GetNamespace(),
-			Labels: map[string]string{
-				constants.LabelKey: constants.LabelValue,
+		},
+	}
+}
+
+func mutateIngressForDeployment(ingress *networkingv1.Ingress, object client.Object) error {
+	suffix := randutils.GenerateSha256(object.GetName() + "-" + object.GetNamespace())
+	extConfig := configuration.GetOIDCAppsControllerConfig()
+	ingressClassName := new(extConfig.GetIngressClassName(object))
+	ingressTLSSecretName := extConfig.GetIngressTLSSecretName(object)
+	host := extConfig.GetHost(object)
+
+	ingress.Labels = map[string]string{
+		constants.LabelKey: constants.LabelValue,
+	}
+	ingress.Spec = networkingv1.IngressSpec{
+		IngressClassName: ingressClassName,
+		TLS: []networkingv1.IngressTLS{
+			{
+				Hosts:      []string{host},
+				SecretName: ingressTLSSecretName,
 			},
 		},
-		Spec: networkingv1.IngressSpec{
-			IngressClassName: ingressClassName,
-			TLS: []networkingv1.IngressTLS{
-				{
-					Hosts:      []string{host},
-					SecretName: ingressTLSSecretName,
-				},
-			},
-			Rules: []networkingv1.IngressRule{
-				{
-					Host: host,
-					IngressRuleValue: networkingv1.IngressRuleValue{
-						HTTP: &networkingv1.HTTPIngressRuleValue{
-							Paths: []networkingv1.HTTPIngressPath{
-								{
-									Path:     "/",
-									PathType: new(networkingv1.PathTypePrefix),
-									Backend: networkingv1.IngressBackend{
-										Service: &networkingv1.IngressServiceBackend{
-											Name: constants.ServiceNameOauth2Service + "-" + suffix,
-											Port: networkingv1.ServiceBackendPort{
-												Name: "http",
-											},
+		Rules: []networkingv1.IngressRule{
+			{
+				Host: host,
+				IngressRuleValue: networkingv1.IngressRuleValue{
+					HTTP: &networkingv1.HTTPIngressRuleValue{
+						Paths: []networkingv1.HTTPIngressPath{
+							{
+								Path:     "/",
+								PathType: new(networkingv1.PathTypePrefix),
+								Backend: networkingv1.IngressBackend{
+									Service: &networkingv1.IngressServiceBackend{
+										Name: constants.ServiceNameOauth2Service + "-" + suffix,
+										Port: networkingv1.ServiceBackendPort{
+											Name: "http",
 										},
 									},
 								},
@@ -66,63 +72,70 @@ func createIngressForDeployment(object client.Object) (networkingv1.Ingress, err
 		},
 	}
 
-	if annotations := configuration.GetOIDCAppsControllerConfig().GetIngressAnnotations(object); len(annotations) > 0 {
+	if annotations := extConfig.GetIngressAnnotations(object); len(annotations) > 0 {
 		ingress.Annotations = annotations
 	}
 
-	applyIngressDefaultPathRedirect(&ingress, object)
+	applyIngressDefaultPathRedirect(ingress, object)
 
-	extraLabels := configuration.GetOIDCAppsControllerConfig().GetIngressLabels(object)
+	extraLabels := extConfig.GetIngressLabels(object)
 	maps.Copy(ingress.Labels, extraLabels)
 
-	return ingress, nil
+	return nil
 }
 
-func createIngressForStatefulSetPod(pod *corev1.Pod, object client.Object) (networkingv1.Ingress, error) {
+func ingressForStatefulSetPodObject(pod *corev1.Pod, object client.Object) *networkingv1.Ingress {
 	suffix := randutils.GenerateSha256(pod.GetName() + "-" + pod.GetNamespace())
-	ingressClassName := new(configuration.GetOIDCAppsControllerConfig().GetIngressClassName(object))
-	ingressTLSSecretName := configuration.GetOIDCAppsControllerConfig().GetIngressTLSSecretName(object)
-
-	hostPrefix, ok := pod.GetAnnotations()[constants.AnnotationHostKey]
-	if !ok {
-		return networkingv1.Ingress{}, fmt.Errorf("host annotation not found in pod %s/%s", pod.GetNamespace(), pod.GetName())
-	}
-
-	host, domain, _ := strings.Cut(hostPrefix, ".")
 	index := fetchStrIndexIfPresent(pod)
 
-	ingress := networkingv1.Ingress{
+	return &networkingv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      constants.IngressName + "-" + addOptionalIndex(index+"-") + suffix,
 			Namespace: object.GetNamespace(),
-			Labels: map[string]string{
-				constants.LabelKey: constants.LabelValue,
+		},
+	}
+}
+
+func mutateIngressForStatefulSetPod(ingress *networkingv1.Ingress, pod *corev1.Pod, object client.Object) error {
+	suffix := randutils.GenerateSha256(pod.GetName() + "-" + pod.GetNamespace())
+	extConfig := configuration.GetOIDCAppsControllerConfig()
+	ingressClassName := new(extConfig.GetIngressClassName(object))
+	ingressTLSSecretName := extConfig.GetIngressTLSSecretName(object)
+	index := fetchStrIndexIfPresent(pod)
+
+	hostPrefix, ok := pod.GetAnnotations()[constants.AnnotationHostKey]
+	if !ok {
+		return fmt.Errorf("host annotation not found in pod %s/%s", pod.GetNamespace(), pod.GetName())
+	}
+
+	host, domain, _ := strings.Cut(hostPrefix, ".")
+	podHost := fmt.Sprintf("%s-%s.%s", host, fetchStrIndexIfPresent(pod), domain)
+
+	ingress.Labels = map[string]string{
+		constants.LabelKey: constants.LabelValue,
+	}
+	ingress.Spec = networkingv1.IngressSpec{
+		IngressClassName: ingressClassName,
+		TLS: []networkingv1.IngressTLS{
+			{
+				Hosts:      []string{podHost},
+				SecretName: ingressTLSSecretName,
 			},
 		},
-		Spec: networkingv1.IngressSpec{
-			IngressClassName: ingressClassName,
-			TLS: []networkingv1.IngressTLS{
-				{
-					Hosts:      []string{fmt.Sprintf("%s-%s.%s", host, fetchStrIndexIfPresent(pod), domain)},
-					SecretName: ingressTLSSecretName,
-				},
-			},
-			Rules: []networkingv1.IngressRule{
-				{
-					Host: fmt.Sprintf("%s-%s.%s", host, fetchStrIndexIfPresent(pod), domain),
-					IngressRuleValue: networkingv1.IngressRuleValue{
-						HTTP: &networkingv1.HTTPIngressRuleValue{
-							Paths: []networkingv1.HTTPIngressPath{
-								{
-									Path:     "/",
-									PathType: new(networkingv1.PathTypePrefix),
-									Backend: networkingv1.IngressBackend{
-										Service: &networkingv1.IngressServiceBackend{
-											Name: constants.ServiceNameOauth2Service + "-" + addOptionalIndex(
-												index+"-") + suffix,
-											Port: networkingv1.ServiceBackendPort{
-												Name: "http",
-											},
+		Rules: []networkingv1.IngressRule{
+			{
+				Host: podHost,
+				IngressRuleValue: networkingv1.IngressRuleValue{
+					HTTP: &networkingv1.HTTPIngressRuleValue{
+						Paths: []networkingv1.HTTPIngressPath{
+							{
+								Path:     "/",
+								PathType: new(networkingv1.PathTypePrefix),
+								Backend: networkingv1.IngressBackend{
+									Service: &networkingv1.IngressServiceBackend{
+										Name: constants.ServiceNameOauth2Service + "-" + addOptionalIndex(index+"-") + suffix,
+										Port: networkingv1.ServiceBackendPort{
+											Name: "http",
 										},
 									},
 								},
@@ -133,16 +146,17 @@ func createIngressForStatefulSetPod(pod *corev1.Pod, object client.Object) (netw
 			},
 		},
 	}
-	if annotations := configuration.GetOIDCAppsControllerConfig().GetIngressAnnotations(object); len(annotations) > 0 {
+
+	if annotations := extConfig.GetIngressAnnotations(object); len(annotations) > 0 {
 		ingress.Annotations = annotations
 	}
 
-	applyIngressDefaultPathRedirect(&ingress, object)
+	applyIngressDefaultPathRedirect(ingress, object)
 
-	extraLabels := configuration.GetOIDCAppsControllerConfig().GetIngressLabels(object)
+	extraLabels := extConfig.GetIngressLabels(object)
 	maps.Copy(ingress.Labels, extraLabels)
 
-	return ingress, nil
+	return nil
 }
 
 func applyIngressDefaultPathRedirect(ingress *networkingv1.Ingress, object client.Object) {

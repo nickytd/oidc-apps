@@ -5,7 +5,6 @@ package controllers
 
 import (
 	"encoding/base64"
-	"errors"
 	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
@@ -19,13 +18,21 @@ import (
 	"github.com/nickytd/oidc-apps/pkg/randutils"
 )
 
-var errSecretDoesNotExist = errors.New("secret does not exist")
-
-func createOauth2Secret(object client.Object) (corev1.Secret, error) {
-	var cfg string
-
+func oauth2SecretObject(object client.Object) *corev1.Secret {
 	suffix := randutils.GenerateSha256(object.GetName() + "-" + object.GetNamespace())
+
+	return &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      constants.SecretNameOauth2Proxy + "-" + suffix,
+			Namespace: object.GetNamespace(),
+		},
+	}
+}
+
+func mutateOauth2Secret(secret *corev1.Secret, object client.Object) error {
 	extConfig := configuration.GetOIDCAppsControllerConfig()
+
+	var cfg string
 
 	switch extConfig.GetClientSecret(object) {
 	case "":
@@ -37,8 +44,8 @@ func createOauth2Secret(object client.Object) (corev1.Secret, error) {
 			configuration.WithOidcIssuerURL(extConfig.GetOidcIssuerURL(object)),
 			configuration.EnableSslInsecureSkipVerify(extConfig.GetSslInsecureSkipVerify(object)),
 			configuration.EnableInsecureOidcSkipIssuerVerification(extConfig.GetInsecureOidcSkipIssuerVerification(object)),
-			configuration.EnableInsecureOidcSkipNonce(extConfig.GetInsecureOidcSkipNonce(object))).Parse()
-
+			configuration.EnableInsecureOidcSkipNonce(extConfig.GetInsecureOidcSkipNonce(object)),
+		).Parse()
 	default:
 		cfg = configuration.NewOAuth2Config(
 			configuration.WithClientID(extConfig.GetClientID(object)),
@@ -48,102 +55,110 @@ func createOauth2Secret(object client.Object) (corev1.Secret, error) {
 			configuration.WithOidcIssuerURL(extConfig.GetOidcIssuerURL(object)),
 			configuration.EnableSslInsecureSkipVerify(extConfig.GetSslInsecureSkipVerify(object)),
 			configuration.EnableInsecureOidcSkipIssuerVerification(extConfig.GetInsecureOidcSkipIssuerVerification(object)),
-			configuration.EnableInsecureOidcSkipNonce(extConfig.GetInsecureOidcSkipNonce(object))).Parse()
+			configuration.EnableInsecureOidcSkipNonce(extConfig.GetInsecureOidcSkipNonce(object)),
+		).Parse()
 	}
 
 	checksum := randutils.GenerateFullSha256(cfg)
 
-	return corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:        constants.SecretNameOauth2Proxy + "-" + suffix,
-			Namespace:   object.GetNamespace(),
-			Annotations: map[string]string{constants.AnnotationOauth2SecertCehcksumKey: checksum},
-			Labels: map[string]string{
-				constants.LabelKey:       constants.LabelValue,
-				constants.SecretLabelKey: constants.Oauth2LabelValue,
-			},
-		},
-		Data: map[string][]byte{"oauth2-proxy.cfg": []byte(cfg)},
-	}, nil
+	secret.Labels = map[string]string{
+		constants.LabelKey:       constants.LabelValue,
+		constants.SecretLabelKey: constants.Oauth2LabelValue,
+	}
+	secret.Annotations = map[string]string{constants.AnnotationOauth2SecertCehcksumKey: checksum}
+	secret.Data = map[string][]byte{"oauth2-proxy.cfg": []byte(cfg)}
+
+	return nil
 }
 
-func createResourceAttributesSecret(object client.Object, targetNamespace string) (corev1.Secret, error) {
+func resourceAttributesSecretObject(object client.Object) *corev1.Secret {
 	suffix := randutils.GenerateSha256(object.GetName() + "-" + object.GetNamespace())
 
-	// TODO: add configurable resource, subresource
+	return &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      constants.SecretNameResourceAttributes + "-" + suffix,
+			Namespace: object.GetNamespace(),
+		},
+	}
+}
+
+func mutateResourceAttributesSecret(secret *corev1.Secret, object client.Object, targetNamespace string) error {
 	cfg := configuration.NewResourceAttributes(
 		configuration.WithNamespace(targetNamespace),
 		configuration.WithSubresource(object.GetName()),
 	).Parse()
 
-	return corev1.Secret{
+	secret.Labels = map[string]string{
+		constants.LabelKey:       constants.LabelValue,
+		constants.SecretLabelKey: constants.RbacLabelValue,
+	}
+	secret.StringData = map[string]string{"config-file.yaml": cfg}
+
+	return nil
+}
+
+func kubeconfigSecretObject(object client.Object) *corev1.Secret {
+	suffix := randutils.GenerateSha256(object.GetName() + "-" + object.GetNamespace())
+
+	return &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      constants.SecretNameResourceAttributes + "-" + suffix,
+			Name:      constants.SecretNameKubeconfig + "-" + suffix,
 			Namespace: object.GetNamespace(),
-			Labels: map[string]string{
-				constants.LabelKey:       constants.LabelValue,
-				constants.SecretLabelKey: constants.RbacLabelValue,
-			},
 		},
-		StringData: map[string]string{"config-file.yaml": cfg},
-	}, nil
+	}
 }
 
-func createKubeconfigSecret(object client.Object) (corev1.Secret, error) {
-	suffix := randutils.GenerateSha256(object.GetName() + "-" + object.GetNamespace())
-
+func mutateKubeconfigSecret(secret *corev1.Secret, object client.Object) error {
 	kubeConfigStr := configuration.GetOIDCAppsControllerConfig().GetKubeConfigStr(object)
-	if len(kubeConfigStr) > 0 {
-		decodestr, err := base64.StdEncoding.DecodeString(kubeConfigStr)
-		if err != nil {
-			return corev1.Secret{}, fmt.Errorf("kubeconfig is not base64 encoded: %w", err)
-		}
 
-		kubeConfig := clientcmdv1.Config{}
-		if err = yaml.Unmarshal(decodestr, &kubeConfig); err != nil {
-			return corev1.Secret{}, fmt.Errorf("kubeconfig %s, is not in the expected format: %w", decodestr, err)
-		}
-
-		kubeconfig, _ := yaml.Marshal(kubeConfig)
-
-		secret := corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      constants.SecretNameKubeconfig + "-" + suffix,
-				Namespace: object.GetNamespace(),
-				Labels: map[string]string{
-					constants.LabelKey:       constants.LabelValue,
-					constants.SecretLabelKey: constants.KubeconfigLabelValue,
-				},
-			},
-			StringData: map[string]string{"kubeconfig": string(kubeconfig)},
-		}
-
-		return secret, nil
+	decodestr, err := base64.StdEncoding.DecodeString(kubeConfigStr)
+	if err != nil {
+		return fmt.Errorf("kubeconfig is not base64 encoded: %w", err)
 	}
 
-	return corev1.Secret{}, errSecretDoesNotExist
+	kubeConfig := clientcmdv1.Config{}
+	if err = yaml.Unmarshal(decodestr, &kubeConfig); err != nil {
+		return fmt.Errorf("kubeconfig %s, is not in the expected format: %w", decodestr, err)
+	}
+
+	kubeconfig, _ := yaml.Marshal(kubeConfig)
+
+	secret.Labels = map[string]string{
+		constants.LabelKey:       constants.LabelValue,
+		constants.SecretLabelKey: constants.KubeconfigLabelValue,
+	}
+	secret.StringData = map[string]string{"kubeconfig": string(kubeconfig)}
+
+	return nil
 }
 
-func createOidcCaBundleSecret(object client.Object) (corev1.Secret, error) {
+func oidcCaBundleSecretObject(object client.Object) *corev1.Secret {
 	suffix := randutils.GenerateSha256(object.GetName() + "-" + object.GetNamespace())
 
-	oidcCABundle := configuration.GetOIDCAppsControllerConfig().GetOidcCABundle(object)
-	if len(oidcCABundle) > 0 {
-		// TODO: verify the oidcCABundle str, it shall be CA certificates in PEM format
-		secret := corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      constants.SecretNameOidcCa + "-" + suffix,
-				Namespace: object.GetNamespace(),
-				Labels: map[string]string{
-					constants.LabelKey:       constants.LabelValue,
-					constants.SecretLabelKey: constants.OidcCa2LabelValue,
-				},
-			},
-			StringData: map[string]string{"ca.crt": oidcCABundle},
-		}
-
-		return secret, nil
+	return &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      constants.SecretNameOidcCa + "-" + suffix,
+			Namespace: object.GetNamespace(),
+		},
 	}
+}
 
-	return corev1.Secret{}, errSecretDoesNotExist
+func mutateOidcCaBundleSecret(secret *corev1.Secret, object client.Object) error {
+	oidcCABundle := configuration.GetOIDCAppsControllerConfig().GetOidcCABundle(object)
+
+	secret.Labels = map[string]string{
+		constants.LabelKey:       constants.LabelValue,
+		constants.SecretLabelKey: constants.OidcCa2LabelValue,
+	}
+	secret.StringData = map[string]string{"ca.crt": oidcCABundle}
+
+	return nil
+}
+
+func needsKubeconfigSecret(object client.Object) bool {
+	return configuration.GetOIDCAppsControllerConfig().GetKubeConfigStr(object) != ""
+}
+
+func needsOidcCaBundleSecret(object client.Object) bool {
+	return configuration.GetOIDCAppsControllerConfig().GetOidcCABundle(object) != ""
 }

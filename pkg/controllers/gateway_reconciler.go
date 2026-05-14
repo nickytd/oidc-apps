@@ -151,18 +151,17 @@ func buildListenerTLS(tls *configuration.ListenerTLSConfig) *gatewayv1.ListenerT
 	}
 
 	for _, ref := range tls.CertificateRefs {
+		group := gatewayv1.Group(ref.Group)
+
+		kind := gatewayv1.Kind(ref.Kind)
+		if kind == "" {
+			kind = "Secret"
+		}
+
 		secretRef := gatewayv1.SecretObjectReference{
-			Name: gatewayv1.ObjectName(ref.Name),
-		}
-
-		if ref.Group != "" {
-			group := gatewayv1.Group(ref.Group)
-			secretRef.Group = &group
-		}
-
-		if ref.Kind != "" {
-			kind := gatewayv1.Kind(ref.Kind)
-			secretRef.Kind = &kind
+			Name:  gatewayv1.ObjectName(ref.Name),
+			Group: &group,
+			Kind:  &kind,
 		}
 
 		if ref.Namespace != "" {

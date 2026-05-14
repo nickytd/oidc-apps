@@ -37,49 +37,48 @@ func getImage(envVar, defaultImage string) string {
 	return defaultImage
 }
 
-// Add an annotation to target workload.
-func addAnnotations(object client.Object) {
-	annotations := object.GetAnnotations()
+func addAnnotations(target client.Object) {
+	annotations := target.GetAnnotations()
 	if len(annotations) == 0 {
 		annotations = make(map[string]string, 5)
 	}
 
-	annotations[constants.AnnotationKey] = object.GetName()
-	annotations[constants.AnnotationHostKey] = resolveHost(object)
-	annotations[constants.AnnotationTargetKey] = configuration.GetOIDCAppsControllerConfig().GetUpstreamTarget(object)
-	annotations[constants.AnnotationSuffixKey] = fetchTargetSuffix(object)
-	annotations[constants.AnnotationOauth2SecertCehcksumKey] = get2ProxySecretChecksum(object)
+	annotations[constants.AnnotationKey] = target.GetName()
+	annotations[constants.AnnotationHostKey] = resolveHost(target)
+	annotations[constants.AnnotationTargetKey] = configuration.GetOIDCAppsControllerConfig().GetUpstreamTarget(target)
+	annotations[constants.AnnotationSuffixKey] = fetchTargetSuffix(target)
+	annotations[constants.AnnotationOauth2SecretChecksumKey] = get2ProxySecretChecksum(target)
 
-	object.SetAnnotations(annotations)
+	target.SetAnnotations(annotations)
 }
 
-func get2ProxySecretChecksum(object client.Object) string {
+func get2ProxySecretChecksum(target client.Object) string {
 	var cfg string
 
 	extConfig := configuration.GetOIDCAppsControllerConfig()
 
-	switch extConfig.GetClientSecret(object) {
+	switch extConfig.GetClientSecret(target) {
 	case "":
 		cfg = configuration.NewOAuth2Config(
-			configuration.WithClientID(extConfig.GetClientID(object)),
+			configuration.WithClientID(extConfig.GetClientID(target)),
 			configuration.WithClientSecretFile("/dev/null"),
-			configuration.WithScope(extConfig.GetScope(object)),
-			configuration.WithRedirectURL(extConfig.GetRedirectURL(object)),
-			configuration.WithOidcIssuerURL(extConfig.GetOidcIssuerURL(object)),
-			configuration.EnableSslInsecureSkipVerify(extConfig.GetSslInsecureSkipVerify(object)),
-			configuration.EnableInsecureOidcSkipIssuerVerification(extConfig.GetInsecureOidcSkipIssuerVerification(object)),
-			configuration.EnableInsecureOidcSkipNonce(extConfig.GetInsecureOidcSkipNonce(object)),
+			configuration.WithScope(extConfig.GetScope(target)),
+			configuration.WithRedirectURL(extConfig.GetRedirectURL(target)),
+			configuration.WithOidcIssuerURL(extConfig.GetOidcIssuerURL(target)),
+			configuration.EnableSslInsecureSkipVerify(extConfig.GetSslInsecureSkipVerify(target)),
+			configuration.EnableInsecureOidcSkipIssuerVerification(extConfig.GetInsecureOidcSkipIssuerVerification(target)),
+			configuration.EnableInsecureOidcSkipNonce(extConfig.GetInsecureOidcSkipNonce(target)),
 		).Parse()
 	default:
 		cfg = configuration.NewOAuth2Config(
-			configuration.WithClientID(extConfig.GetClientID(object)),
-			configuration.WithClientSecret(extConfig.GetClientSecret(object)),
-			configuration.WithScope(extConfig.GetScope(object)),
-			configuration.WithRedirectURL(extConfig.GetRedirectURL(object)),
-			configuration.WithOidcIssuerURL(extConfig.GetOidcIssuerURL(object)),
-			configuration.EnableSslInsecureSkipVerify(extConfig.GetSslInsecureSkipVerify(object)),
-			configuration.EnableInsecureOidcSkipIssuerVerification(extConfig.GetInsecureOidcSkipIssuerVerification(object)),
-			configuration.EnableInsecureOidcSkipNonce(extConfig.GetInsecureOidcSkipNonce(object)),
+			configuration.WithClientID(extConfig.GetClientID(target)),
+			configuration.WithClientSecret(extConfig.GetClientSecret(target)),
+			configuration.WithScope(extConfig.GetScope(target)),
+			configuration.WithRedirectURL(extConfig.GetRedirectURL(target)),
+			configuration.WithOidcIssuerURL(extConfig.GetOidcIssuerURL(target)),
+			configuration.EnableSslInsecureSkipVerify(extConfig.GetSslInsecureSkipVerify(target)),
+			configuration.EnableInsecureOidcSkipIssuerVerification(extConfig.GetInsecureOidcSkipIssuerVerification(target)),
+			configuration.EnableInsecureOidcSkipNonce(extConfig.GetInsecureOidcSkipNonce(target)),
 		).Parse()
 	}
 
@@ -229,39 +228,39 @@ func addProxyContainer(name string, podSpec *corev1.PodSpec, container corev1.Co
 	podSpec.Containers = append(podSpec.Containers, container)
 }
 
-func fetchKubconfigSecretName(suffix string, object client.Object) string {
-	if configuration.GetOIDCAppsControllerConfig().GetKubeConfigStr(object) != "" {
+func fetchKubconfigSecretName(suffix string, target client.Object) string {
+	if configuration.GetOIDCAppsControllerConfig().GetKubeConfigStr(target) != "" {
 		return "kubeconfig-" + suffix
 	}
 
-	if configuration.GetOIDCAppsControllerConfig().GetKubeSecretName(object) != "" {
-		return configuration.GetOIDCAppsControllerConfig().GetKubeSecretName(object)
+	if configuration.GetOIDCAppsControllerConfig().GetKubeSecretName(target) != "" {
+		return configuration.GetOIDCAppsControllerConfig().GetKubeSecretName(target)
 	}
 
 	// In case of kubeConfigStr, the name of the secret is as below
 	return constants.SecretNameKubeconfig + "-" + suffix
 }
 
-func fetchOidcCASecretName(suffix string, object client.Object) string {
-	if configuration.GetOIDCAppsControllerConfig().GetOidcCABundle(object) != "" {
+func fetchOidcCASecretName(suffix string, target client.Object) string {
+	if configuration.GetOIDCAppsControllerConfig().GetOidcCABundle(target) != "" {
 		return constants.SecretNameOidcCa + "-" + suffix
 	}
 
-	return configuration.GetOIDCAppsControllerConfig().GetOidcCASecretName(object)
+	return configuration.GetOIDCAppsControllerConfig().GetOidcCASecretName(target)
 }
 
-func fetchTargetSuffix(object client.Object) string {
-	objectAnnotations := object.GetAnnotations()
+func fetchTargetSuffix(target client.Object) string {
+	objectAnnotations := target.GetAnnotations()
 	if len(objectAnnotations) == 0 {
 		objectAnnotations = make(map[string]string, 1)
 	}
 
 	suffix, ok := objectAnnotations[constants.AnnotationSuffixKey]
 	if !ok {
-		suffix = randutils.GenerateSha256(object.GetName() + "-" + object.GetNamespace())
+		suffix = randutils.GenerateSha256(target.GetName() + "-" + target.GetNamespace())
 		objectAnnotations[constants.AnnotationSuffixKey] = suffix
 
-		object.SetAnnotations(objectAnnotations)
+		target.SetAnnotations(objectAnnotations)
 	}
 
 	return suffix
@@ -479,27 +478,27 @@ func getOIDCProxyContainer(_log logr.Logger, pod *corev1.PodSpec, owner client.O
 	return container
 }
 
-func shallAddKubeConfigSecretName(object client.Object) bool {
-	if configuration.GetOIDCAppsControllerConfig().GetKubeConfigStr(object) != "" {
+func shallAddKubeConfigSecretName(target client.Object) bool {
+	if configuration.GetOIDCAppsControllerConfig().GetKubeConfigStr(target) != "" {
 		return true
 	}
 
-	return configuration.GetOIDCAppsControllerConfig().GetKubeSecretName(object) != ""
+	return configuration.GetOIDCAppsControllerConfig().GetKubeSecretName(target) != ""
 }
 
-func shallAddOidcCaSecretName(object client.Object) bool {
-	if configuration.GetOIDCAppsControllerConfig().GetOidcCABundle(object) != "" {
+func shallAddOidcCaSecretName(target client.Object) bool {
+	if configuration.GetOIDCAppsControllerConfig().GetOidcCABundle(target) != "" {
 		return true
 	}
 
-	return configuration.GetOIDCAppsControllerConfig().GetOidcCASecretName(object) != ""
+	return configuration.GetOIDCAppsControllerConfig().GetOidcCASecretName(target) != ""
 }
 
-func resolveHost(object client.Object) string {
+func resolveHost(target client.Object) string {
 	cfg := configuration.GetOIDCAppsControllerConfig()
 	if cfg.IsHTTPRouteEnabled() {
-		return cfg.GetHTTPRouteHost(object)
+		return cfg.GetHTTPRouteHost(target)
 	}
 
-	return cfg.GetHost(object)
+	return cfg.GetHost(target)
 }

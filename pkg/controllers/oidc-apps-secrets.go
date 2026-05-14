@@ -65,7 +65,7 @@ func mutateOauth2Secret(secret *corev1.Secret, object client.Object) error {
 		constants.LabelKey:       constants.LabelValue,
 		constants.SecretLabelKey: constants.Oauth2LabelValue,
 	}
-	secret.Annotations = map[string]string{constants.AnnotationOauth2SecertCehcksumKey: checksum}
+	secret.Annotations = map[string]string{constants.AnnotationOauth2SecretChecksumKey: checksum}
 	secret.Data = map[string][]byte{"oauth2-proxy.cfg": []byte(cfg)}
 
 	return nil

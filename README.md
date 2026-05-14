@@ -22,8 +22,22 @@ global:
     clientId: "grafana"
     oidcIssuerUrl: "https://oidc.provider.com"
   domainName: "company.org"
-  httpRoutes:
-    enabled: true
+  gateway:
+    managed: true
+    gatewayClassName: envoy
+    httpRoutes:
+      enabled: true
+    listeners:
+      - name: https
+        protocol: HTTPS
+        port: 443
+        allowedRoutes:
+          namespaces:
+            from: All
+        tls:
+          mode: Terminate
+          certificateRefs:
+            - name: wildcard-tls
 
 targets:
   - name: grafana
@@ -37,10 +51,6 @@ targets:
     targetProtocol: http
     httpRoute:
       create: true
-      parentRefs:
-        - name: my-gateway
-          namespace: default
-          sectionName: https
 ```
 
 ![image](images/oidc-apps.png)

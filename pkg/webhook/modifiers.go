@@ -7,10 +7,12 @@ import (
 	"maps"
 	"os"
 	"reflect"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
 
+	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -24,6 +26,8 @@ const (
 	defaultKubeRbacProxyImage = "ghcr.io/nickytd/oidc-apps/kube-rbac-proxy:latest"
 	defaultOAuth2ProxyImage   = "quay.io/oauth2-proxy/oauth2-proxy:v7.15.2"
 )
+
+var oauth2ProxyArgPattern = regexp.MustCompile(`^--[a-z][a-z0-9-]+(=.*)?$`)
 
 func getImage(envVar, defaultImage string) string {
 	if v := os.Getenv(envVar); v != "" {
@@ -381,7 +385,7 @@ func getKubeRbacProxyContainer(clientID, issuerURL, upstream string, pod *corev1
 	return container
 }
 
-func getOIDCProxyContainer(pod *corev1.PodSpec, owner client.Object) corev1.Container {
+func getOIDCProxyContainer(_log logr.Logger, pod *corev1.PodSpec, owner client.Object) corev1.Container {
 	image := getImage("OAUTH2_PROXY_IMAGE", defaultOAuth2ProxyImage)
 
 	if pod == nil {
@@ -422,22 +426,24 @@ func getOIDCProxyContainer(pod *corev1.PodSpec, owner client.Object) corev1.Cont
 	fullHash := randutils.GenerateFullSha256(owner.GetName() + "-" + owner.GetNamespace() + "-" + string(owner.GetUID()) + "-cookie-secret")
 	cookieSecret := fullHash[:32]
 
+	extConfig := configuration.GetOIDCAppsControllerConfig()
+
 	container := corev1.Container{
 		Name:            constants.ContainerNameOauth2Proxy,
 		Image:           image,
 		ImagePullPolicy: "IfNotPresent",
 		Args: []string{"--provider=oidc",
 			"--config=/etc/oauth2-proxy/oauth2-proxy.cfg",
-			"--code-challenge-method=S256",
+			"--code-challenge-method=" + extConfig.GetCodeChallengeMethod(owner),
 			"--pass-authorization-header=true",
 			"--cookie-secret=" + cookieSecret,
-			"--cookie-refresh=3600s",
+			"--cookie-refresh=" + extConfig.GetCookieRefresh(owner),
 			"--http-address=0.0.0.0:8000",
-			"--email-domain=*",
+			"--email-domain=" + extConfig.GetEmailDomain(owner),
 			"--reverse-proxy=true",
-			"--skip-provider-button=true",
+			"--skip-provider-button=" + strconv.FormatBool(extConfig.GetSkipProviderButton(owner)),
 			"--skip-jwt-bearer-tokens=true",
-			"--approval-prompt=auto",
+			"--approval-prompt=" + extConfig.GetApprovalPrompt(owner),
 			"--upstream=http://127.0.0.1:8100"},
 		SecurityContext: &corev1.SecurityContext{
 			Capabilities:             &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}},
@@ -454,6 +460,20 @@ func getOIDCProxyContainer(pod *corev1.PodSpec, owner client.Object) corev1.Cont
 	if shallAddOidcCaSecretName(owner) {
 		// Add volume mount and start parameter if the secret name is provided
 		container.Args = append(container.Args, "--provider-ca-file=/etc/oauth2-proxy/ca.crt")
+	}
+
+	if extra := extConfig.GetExtraArgs(owner); len(extra) > 0 {
+		for _, arg := range extra {
+			if oauth2ProxyArgPattern.MatchString(arg) {
+				container.Args = append(container.Args, arg)
+			} else {
+				_log.Info("skipping invalid oauth2-proxy extra arg",
+					"arg", arg,
+					"owner", owner.GetName(),
+					"namespace", owner.GetNamespace(),
+				)
+			}
+		}
 	}
 
 	return container

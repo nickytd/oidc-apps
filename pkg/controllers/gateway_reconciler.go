@@ -98,6 +98,7 @@ func (g *GatewayReconciler) reconcileGateway(ctx context.Context, conf *configur
 		gw.Spec = gatewayv1.GatewaySpec{
 			GatewayClassName: gatewayv1.ObjectName(conf.GatewayClassName),
 			Listeners:        buildListeners(conf.Listeners),
+			Infrastructure:   buildInfrastructure(conf.Infrastructure),
 		}
 
 		return nil
@@ -212,4 +213,39 @@ func buildAllowedRoutes(ar *configuration.AllowedRoutes) *gatewayv1.AllowedRoute
 	}
 
 	return routes
+}
+
+// buildInfrastructure converts the chart-facing GatewayInfrastructure config to
+// the upstream Gateway-API type. Returns nil for nil input so the reconciler's
+// CreateOrUpdate mutate fn doesn't diff nil-vs-empty-struct on every pass.
+func buildInfrastructure(in *configuration.GatewayInfrastructure) *gatewayv1.GatewayInfrastructure {
+	if in == nil {
+		return nil
+	}
+
+	infra := &gatewayv1.GatewayInfrastructure{}
+
+	if len(in.Annotations) > 0 {
+		infra.Annotations = make(map[gatewayv1.AnnotationKey]gatewayv1.AnnotationValue, len(in.Annotations))
+		for k, v := range in.Annotations {
+			infra.Annotations[gatewayv1.AnnotationKey(k)] = gatewayv1.AnnotationValue(v)
+		}
+	}
+
+	if len(in.Labels) > 0 {
+		infra.Labels = make(map[gatewayv1.LabelKey]gatewayv1.LabelValue, len(in.Labels))
+		for k, v := range in.Labels {
+			infra.Labels[gatewayv1.LabelKey(k)] = gatewayv1.LabelValue(v)
+		}
+	}
+
+	if in.ParametersRef != nil {
+		infra.ParametersRef = &gatewayv1.LocalParametersReference{
+			Group: gatewayv1.Group(in.ParametersRef.Group),
+			Kind:  gatewayv1.Kind(in.ParametersRef.Kind),
+			Name:  in.ParametersRef.Name,
+		}
+	}
+
+	return infra
 }

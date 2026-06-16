@@ -10,6 +10,13 @@ on:
       - 'VERSION'
   workflow_dispatch:
 
+# Serialize releases on the same ref. A push that lands while a previous run
+# is still mid-flight would otherwise race on `git push` of the appVersion
+# bump (non-fast-forward rejection seen in 27600474172).
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   prepare:
     runs-on: ubuntu-latest
@@ -32,13 +39,19 @@ jobs:
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           if [[ "${VERSION}" == *-dev* ]]; then
             echo "release=false" >> "$GITHUB_OUTPUT"
+          elif git ls-remote --exit-code --tags origin "${VERSION}" > /dev/null; then
+            # Tag already exists upstream — this VERSION was released previously.
+            # Short-circuit so manual re-dispatches don't burn ~3 minutes building
+            # images that the release job will then refuse to tag.
+            echo "Tag ${VERSION} already exists; skipping release."
+            echo "release=false" >> "$GITHUB_OUTPUT"
           else
             echo "release=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Skip if dev version
+      - name: Skip release
         if: steps.version.outputs.release == 'false'
-        run: echo "Version ${{ steps.version.outputs.version }} is a dev version, skipping release."
+        run: echo "Skipping release for VERSION=${{ steps.version.outputs.version }} (dev version or tag already exists)."
 
       - name: Login to GHCR
         if: steps.version.outputs.release == 'true'
@@ -162,10 +175,15 @@ jobs:
 
       - name: Create git tag
         run: |
+          VERSION="${{ needs.prepare.outputs.version }}"
+          if git ls-remote --exit-code --tags origin "${VERSION}" > /dev/null; then
+            echo "Tag ${VERSION} already exists; nothing to do."
+            exit 0
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag -a "${{ needs.prepare.outputs.version }}" -m "Release ${{ needs.prepare.outputs.version }}"
-          git push origin "${{ needs.prepare.outputs.version }}"
+          git tag -a "${VERSION}" -m "Release ${VERSION}"
+          git push origin "${VERSION}"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3

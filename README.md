@@ -102,6 +102,26 @@ See [example/kind-setup/README.md](example/kind-setup/README.md) for details.
 - [oauth2-proxy](https://github.com/oauth2-proxy/oauth2-proxy)
 - [kube-rbac-proxy](https://github.com/brancz/kube-rbac-proxy)
 
+## Release Process
+
+Releases are driven by the [`Release`](.github/workflows/release.yml) workflow,
+triggered by a push that changes [`VERSION`](VERSION) on `main` (or by manual
+dispatch). To cut a new release:
+
+1. Bump [`VERSION`](VERSION) to the next semver tag on `main`.
+2. The workflow then, in order:
+   - bumps `appVersion` in [charts/oidc-apps/Chart.yaml](charts/oidc-apps/Chart.yaml)
+     and pushes the bump commit;
+   - packages and pushes the Helm chart as an OCI artifact to
+     `oci://ghcr.io/nickytd/oidc-apps/charts`;
+   - builds & pushes multi-arch (`amd64` + `arm64`) container images for both
+     `oidc-apps` and `kube-rbac-proxy` to `ghcr.io/nickytd/oidc-apps/`;
+   - creates the `vX.Y.Z` git tag and a GitHub Release with auto-generated
+     notes.
+
+The chart `version` (the chart-shape version, distinct from `appVersion`) is
+bumped manually in a separate PR when chart values change.
+
 ## Feedback and Support
 
 Feedback and contributions are always welcome!

@@ -30,6 +30,35 @@ type GatewayGlobalConf struct {
 	Annotations map[string]string `json:"annotations,omitzero"`
 	// Labels for the managed Gateway
 	Labels map[string]string `json:"labels,omitzero"`
+	// Infrastructure mirrors gateway.networking.k8s.io/v1.GatewayInfrastructure.
+	// Unlike Annotations/Labels above (which apply to the Gateway resource itself),
+	// these flow to the resources the gateway-controller generates (e.g. the
+	// LoadBalancer Service / Pod). Use ParametersRef to override Service-level
+	// fields such as ipFamilyPolicy via a JSON-merge-patch ConfigMap.
+	Infrastructure *GatewayInfrastructure `json:"infrastructure,omitzero"`
+}
+
+// GatewayInfrastructure mirrors gateway.networking.k8s.io/v1.GatewayInfrastructure.
+type GatewayInfrastructure struct {
+	// Annotations applied by the gateway-controller to resources it creates
+	// for this Gateway (e.g. the generated Service).
+	Annotations map[string]string `json:"annotations,omitzero"`
+	// Labels applied by the gateway-controller to resources it creates
+	// for this Gateway.
+	Labels map[string]string `json:"labels,omitzero"`
+	// ParametersRef references an implementation-specific resource (typically
+	// a ConfigMap) that customizes the generated infrastructure resources.
+	ParametersRef *GatewayParametersRef `json:"parametersRef,omitzero"`
+}
+
+// GatewayParametersRef mirrors gateway.networking.k8s.io/v1.LocalParametersReference.
+type GatewayParametersRef struct {
+	// Group of the referent. Use "" for the core API.
+	Group string `json:"group"`
+	// Kind of the referent (e.g. "ConfigMap").
+	Kind string `json:"kind"`
+	// Name of the referent.
+	Name string `json:"name"`
 }
 
 // HTTPRoutesConf holds configuration for HTTPRoute support

@@ -151,6 +151,22 @@ global:
     #        - kind: HTTPRoute
     annotations: {}
     labels: {}
+    # Optional Gateway-API spec.infrastructure block. Annotations and labels
+    # under this key are propagated by the gateway-controller to the resources
+    # it generates (e.g. the LoadBalancer Service / Pod) — distinct from the
+    # `annotations`/`labels` above, which apply to the Gateway resource itself.
+    # `parametersRef` points at an implementation-specific resource (typically
+    # a ConfigMap whose `data.service` is a JSON-merge-patch) used to override
+    # Service-level fields such as ipFamilyPolicy on IPv4-only clusters.
+    infrastructure: {}
+    # infrastructure:
+    #   annotations:
+    #     external-dns.alpha.kubernetes.io/hostname: oidc-apps.example.com
+    #   labels: {}
+    #   parametersRef:
+    #     group: ""
+    #     kind: ConfigMap
+    #     name: oidc-apps-gateway-svc-params
 
   # OIDC Provider Configuration shared by all targets in the cluster
   # All fields can be overwritten by a concrete target

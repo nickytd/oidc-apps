@@ -408,6 +408,40 @@
               "additionalProperties": {
                 "type": "string"
               }
+            },
+            "infrastructure": {
+              "type": "object",
+              "description": "Gateway-API spec.infrastructure block; flows to resources the gateway-controller generates (e.g. the LoadBalancer Service)",
+              "properties": {
+                "annotations": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                },
+                "labels": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                },
+                "parametersRef": {
+                  "type": "object",
+                  "description": "Reference to an implementation-specific resource (typically a ConfigMap) that customizes the generated infrastructure",
+                  "properties": {
+                    "group": {
+                      "type": "string"
+                    },
+                    "kind": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["group", "kind", "name"]
+                }
+              }
             }
           }
         },

@@ -5,8 +5,9 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/nickytd/oidc-apps)](https://goreportcard.com/report/github.com/nickytd/oidc-apps)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/nickytd/oidc-apps)](go.mod)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/nickytd/oidc-apps/badge)](https://securityscorecards.dev/viewer/?uri=github.com/nickytd/oidc-apps)
-[![GHCR](https://ghcr-badge.egpl.dev/nickytd/oidc-apps/oidc-apps/latest_tag?label=image)](https://github.com/nickytd/oidc-apps/pkgs/container/oidc-apps%2Foidc-apps)
-[![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE) [![Release](https://img.shields.io/github/v/release/nickytd/oidc-apps.svg?style=flat)](https://github.com/nickytd/oidc-apps) [![Go Reference](https://pkg.go.dev/badge/github.com/nickytd/oidc-apps.svg)](https://pkg.go.dev/github.com/nickytd/oidc-apps)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/nickytd/oidc-apps.svg?style=flat)](https://github.com/nickytd/oidc-apps)
+[![Go Reference](https://pkg.go.dev/badge/github.com/nickytd/oidc-apps.svg)](https://pkg.go.dev/github.com/nickytd/oidc-apps)
 
 ## Usage
 

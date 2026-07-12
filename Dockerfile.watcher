@@ -8,7 +8,7 @@ COPY . .
 RUN go mod download && cd tools && go mod download
 RUN make build-watcher
 
-FROM quay.io/brancz/kube-rbac-proxy:v0.22.0 AS kube-rbac-proxy-watcher
+FROM ghcr.io/kube-rbac-proxy/kube-rbac-proxy:v0.22.1 AS kube-rbac-proxy-watcher
 
 COPY --from=builder /src/bin/watcher /usr/bin/watcher
 

@@ -1,6 +1,6 @@
 module github.com/nickytd/oidc-apps
 
-go 1.26.3
+go 1.26.5
 
 require (
 	github.com/evanphx/json-patch/v5 v5.9.11

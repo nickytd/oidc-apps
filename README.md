@@ -2,7 +2,6 @@
 
 [![Build](https://github.com/nickytd/oidc-apps/actions/workflows/build.yml/badge.svg)](https://github.com/nickytd/oidc-apps/actions/workflows/build.yml)
 [![Release](https://github.com/nickytd/oidc-apps/actions/workflows/release.yml/badge.svg)](https://github.com/nickytd/oidc-apps/actions/workflows/release.yml)
-[![Go Report Card](https://goreportcard.com/badge/github.com/nickytd/oidc-apps)](https://goreportcard.com/report/github.com/nickytd/oidc-apps)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/nickytd/oidc-apps)](go.mod)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/nickytd/oidc-apps/badge)](https://securityscorecards.dev/viewer/?uri=github.com/nickytd/oidc-apps)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)

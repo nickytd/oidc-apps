@@ -24,7 +24,7 @@ import (
 
 const (
 	defaultKubeRbacProxyImage = "ghcr.io/nickytd/oidc-apps/kube-rbac-proxy:latest"
-	defaultOAuth2ProxyImage   = "quay.io/oauth2-proxy/oauth2-proxy:v7.15.2"
+	defaultOAuth2ProxyImage   = "quay.io/oauth2-proxy/oauth2-proxy:v7.15.3"
 )
 
 var oauth2ProxyArgPattern = regexp.MustCompile(`^--[a-z][a-z0-9-]+(=.*)?$`)

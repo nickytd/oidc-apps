@@ -8,12 +8,23 @@
       "automerge": true
     }
   ],
+  "golang": {
+    "fileMatch": ["(^|/)go\\.mod$", "^tools/go\\.mod$"]
+  },
   "customManagers": [
     {
       "customType": "regex",
-      "fileMatch": ["pkg/webhook/modifiers\\.go$"],
+      "fileMatch": ["^pkg/webhook/modifiers\\.go$"],
       "matchStrings": [
-        "default\\w+Image\\s*=\\s*\"(?<depName>[^:]+):(?<currentValue>[^\"]+)\""
+        "defaultOAuth2ProxyImage\\s*=\\s*\"(?<depName>[^:]+):(?<currentValue>[^\"]+)\""
+      ],
+      "datasourceTemplate": "docker"
+    },
+    {
+      "customType": "regex",
+      "fileMatch": ["^Dockerfile\\.watcher$"],
+      "matchStrings": [
+        "FROM (?<depName>ghcr\\.io/kube-rbac-proxy/kube-rbac-proxy):(?<currentValue>[^\\s]+)"
       ],
       "datasourceTemplate": "docker"
     }

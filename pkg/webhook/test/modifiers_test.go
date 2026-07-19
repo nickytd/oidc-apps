@@ -867,9 +867,210 @@ var _ = Describe("Cookie Secret Deterministic Generation Tests", func() {
 				"updateSecret", cookieSecretOnUpdate)
 		})
 	})
+
+	Context("when kubeRbacProxy kubeConfigStr and kubeSecretRef are not configured", func() {
+		var (
+			deployment      *appsv1.Deployment
+			replicaSet      *appsv1.ReplicaSet
+			pod             *corev1.Pod
+			localPodWebhook *webhook.PodMutator
+			savedGlobal     configuration.Global
+			savedTargets    []configuration.Target
+		)
+
+		BeforeEach(func() {
+			deployment = &appsv1.Deployment{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "apps/v1",
+					Kind:       "Deployment",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "nginx",
+					Namespace: "nginx",
+					Labels:    map[string]string{"app": "nginx"},
+					UID:       "deployment-uid-sa-token",
+				},
+			}
+			replicaSet = &appsv1.ReplicaSet{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "apps/v1",
+					Kind:       "ReplicaSet",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "nginx-rs-0001",
+					Namespace: "nginx",
+					UID:       "replicaset-uid-sa-token",
+					OwnerReferences: []metav1.OwnerReference{
+						{
+							APIVersion: "apps/v1",
+							Kind:       "Deployment",
+							Name:       "nginx",
+							UID:        "deployment-uid-sa-token",
+						},
+					},
+				},
+			}
+			pod = &corev1.Pod{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "v1",
+					Kind:       "Pod",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "nginx-pod-1",
+					Namespace: "nginx",
+					UID:       "pod-uid-sa-token",
+					OwnerReferences: []metav1.OwnerReference{
+						{
+							APIVersion: "apps/v1",
+							Kind:       "ReplicaSet",
+							Name:       "nginx-rs-0001",
+							UID:        "replicaset-uid-sa-token",
+						},
+					},
+				},
+				Spec: corev1.PodSpec{
+					// Simulate the kube-api-access projected volume injected by kubelet.
+					Volumes: []corev1.Volume{
+						{
+							Name: "kube-api-access-abcde",
+							VolumeSource: corev1.VolumeSource{
+								Projected: &corev1.ProjectedVolumeSource{
+									Sources: []corev1.VolumeProjection{
+										{ServiceAccountToken: &corev1.ServiceAccountTokenProjection{Path: "token"}},
+										{ConfigMap: &corev1.ConfigMapProjection{LocalObjectReference: corev1.LocalObjectReference{Name: "kube-root-ca.crt"}}},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			s := runtime.NewScheme()
+			err := scheme.AddToScheme(s)
+			Expect(err).NotTo(HaveOccurred())
+
+			fakeClient := fake.NewClientBuilder().
+				WithScheme(s).
+				WithObjects(deployment, replicaSet, pod).
+				Build()
+
+			cfg := configuration.GetOIDCAppsControllerConfig()
+			savedGlobal = cfg.Global
+			savedTargets = cfg.Targets
+
+			// Configure without any kubeRbacProxy kubeconfig — kube-rbac-proxy should
+			// use the pod's service account token for SubjectAccessReviews instead.
+			cfg.Global = configuration.Global{
+				DomainName: "example.org",
+				Oauth2Proxy: &configuration.Oauth2ProxyConfig{
+					ClientID:      "client-id",
+					ClientSecret:  "client-secret",
+					OidcIssuerURL: "https://oidc-provider.org",
+				},
+				// KubeRbacProxy intentionally nil: no kubeConfigStr, no kubeSecretRef
+			}
+			cfg.Targets = []configuration.Target{
+				{
+					Name: "nginx",
+					LabelSelector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{"app": "nginx"},
+					},
+				},
+			}
+			cfg.SetClient(fakeClient)
+
+			localPodWebhook = &webhook.PodMutator{
+				Client:  fakeClient,
+				Decoder: admission.NewDecoder(s),
+			}
+		})
+
+		It("should not add --kubeconfig arg to kube-rbac-proxy when no kubeconfig is configured", func() {
+			patchedPod := patchPodWithWebhook(pod, localPodWebhook)
+
+			var rbacArgs []string
+
+			for _, container := range patchedPod.Spec.Containers {
+				if container.Name == constants.ContainerNameKubeRbacProxy {
+					rbacArgs = container.Args
+
+					break
+				}
+			}
+
+			Expect(rbacArgs).NotTo(BeEmpty(), "kube-rbac-proxy container should be present")
+
+			for _, arg := range rbacArgs {
+				Expect(arg).NotTo(HavePrefix("--kubeconfig="),
+					"kube-rbac-proxy should not receive --kubeconfig when no kubeconfig is configured")
+			}
+		})
+
+		It("should mount the pod service account token volume into kube-rbac-proxy when no kubeconfig is configured", func() {
+			patchedPod := patchPodWithWebhook(pod, localPodWebhook)
+
+			var rbacMounts []corev1.VolumeMount
+
+			for _, container := range patchedPod.Spec.Containers {
+				if container.Name == constants.ContainerNameKubeRbacProxy {
+					rbacMounts = container.VolumeMounts
+
+					break
+				}
+			}
+
+			Expect(rbacMounts).NotTo(BeEmpty(), "kube-rbac-proxy should have volume mounts")
+
+			var hasSAMount bool
+
+			for _, mount := range rbacMounts {
+				if mount.MountPath == "/var/run/secrets/kubernetes.io/serviceaccount" {
+					hasSAMount = true
+
+					Expect(mount.ReadOnly).To(BeTrue(), "SA token mount should be read-only")
+
+					break
+				}
+			}
+
+			Expect(hasSAMount).To(BeTrue(),
+				"kube-rbac-proxy should mount the pod SA token at /var/run/secrets/kubernetes.io/serviceaccount "+
+					"so it can use in-cluster auth for SubjectAccessReviews without a Dex OIDC token")
+		})
+
+		It("should not include a kubeconfig source in the kube-rbac-proxy projected volume when no kubeconfig is configured", func() {
+			patchedPod := patchPodWithWebhook(pod, localPodWebhook)
+
+			for _, vol := range patchedPod.Spec.Volumes {
+				if vol.Name != constants.KubeRbacProxyVolumeName {
+					continue
+				}
+
+				if vol.Projected == nil {
+					break
+				}
+
+				for _, src := range vol.Projected.Sources {
+					if src.Secret != nil {
+						for _, item := range src.Secret.Items {
+							Expect(item.Key).NotTo(Equal("kubeconfig"),
+								"kube-rbac-proxy projected volume should not include a kubeconfig secret source "+
+									"when kubeConfigStr and kubeSecretRef are both empty")
+						}
+					}
+				}
+			}
+		})
+
+		AfterEach(func() {
+			cfg := configuration.GetOIDCAppsControllerConfig()
+			cfg.Global = savedGlobal
+			cfg.Targets = savedTargets
+		})
+	})
 })
 
-// Helper function to extract cookie secret from the oauth2-proxy container args
 func extractCookieSecret(pod *corev1.Pod) string {
 	for _, container := range pod.Spec.Containers {
 		if container.Name == constants.ContainerNameOauth2Proxy {

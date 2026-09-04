@@ -272,9 +272,9 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	gotest.tools/gotestsum v1.13.0 // indirect
 	honnef.co/go/tools v0.8.1 // indirect
-	k8s.io/apimachinery v0.36.2 // indirect
+	k8s.io/apimachinery v0.37.0 // indirect
 	mvdan.cc/gofumpt v0.11.0 // indirect
 	mvdan.cc/unparam v0.0.0-20260823230713-2fa3d841b0c8 // indirect
-	sigs.k8s.io/controller-runtime/tools/setup-envtest v0.24.1 // indirect
+	sigs.k8s.io/controller-runtime/tools/setup-envtest v0.25.0 // indirect
 	sigs.k8s.io/yaml v1.6.0 // indirect
 )

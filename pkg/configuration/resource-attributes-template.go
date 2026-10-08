@@ -6,7 +6,7 @@ package configuration
 import (
 	_ "embed"
 
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
 //go:embed templates/resource-attributes.yaml
@@ -41,8 +41,8 @@ func (r *root) Parse() string {
 // OptRAttributes is a function that modifies the ResourceAttributes
 type OptRAttributes func(*ResourceAttributes)
 
-// NewResourceAttributes returns a new configParser for the ResourceAttributes
-func NewResourceAttributes(opt ...OptRAttributes) configParser {
+// NewResourceAttributes returns a new ConfigParser for the ResourceAttributes
+func NewResourceAttributes(opt ...OptRAttributes) ConfigParser {
 	root := &root{
 		Authorization: Authorization{
 			ResourceAttributes: ResourceAttributes{

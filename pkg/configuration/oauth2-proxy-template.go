@@ -13,7 +13,8 @@ import (
 //go:embed templates/oauth2-proxy.cfg
 var oauth2 string
 
-type configParser interface {
+// ConfigParser renders a configuration fragment to its string form.
+type ConfigParser interface {
 	Parse() string
 }
 
@@ -91,7 +92,7 @@ func (o *oauth2Config) Parse() string {
 }
 
 // NewOAuth2Config returns a new oauth2 config
-func NewOAuth2Config(opts ...OptOauth2) configParser {
+func NewOAuth2Config(opts ...OptOauth2) ConfigParser {
 	cfg := oauth2Config{}
 	for _, o := range opts {
 		o(&cfg)

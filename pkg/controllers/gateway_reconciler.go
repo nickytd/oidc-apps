@@ -53,10 +53,12 @@ func (g *GatewayReconciler) Reconcile(ctx context.Context, _ reconcile.Request) 
 
 func (g *GatewayReconciler) cleanupOrphanedGateway(ctx context.Context) error {
 	gwList := &gatewayv1.GatewayList{}
-	if err := g.Client.List(ctx, gwList,
+
+	err := g.Client.List(ctx, gwList,
 		client.InNamespace(g.Namespace),
 		client.MatchingLabels{constants.LabelKey: constants.LabelValue},
-	); err != nil {
+	)
+	if err != nil {
 		return fmt.Errorf("failed to list gateways: %w", err)
 	}
 

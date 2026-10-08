@@ -50,14 +50,15 @@ func reconcileOwnedResource(ctx context.Context, c client.Client, owner client.O
 func fetchOidcAppsServices(ctx context.Context, c client.Client, object client.Object) (*corev1.ServiceList, error) {
 	oidcService := &corev1.ServiceList{}
 
-	if err := c.List(ctx, oidcService,
+	err := c.List(ctx, oidcService,
 		client.InNamespace(object.GetNamespace()),
 		client.MatchingLabelsSelector{
 			Selector: labels.SelectorFromSet(map[string]string{
 				constants.LabelKey: constants.LabelValue,
 			}),
 		},
-	); err != nil {
+	)
+	if err != nil {
 		return oidcService, client.IgnoreNotFound(err)
 	}
 
@@ -76,14 +77,15 @@ func fetchOidcAppsIngress(ctx context.Context, c client.Client, object client.Ob
 	error) {
 	oidcIngress := &networkingv1.IngressList{}
 
-	if err := c.List(ctx, oidcIngress,
+	err := c.List(ctx, oidcIngress,
 		client.InNamespace(object.GetNamespace()),
 		client.MatchingLabelsSelector{
 			Selector: labels.SelectorFromSet(map[string]string{
 				constants.LabelKey: constants.LabelValue,
 			}),
 		},
-	); err != nil {
+	)
+	if err != nil {
 		return oidcIngress, client.IgnoreNotFound(err)
 	}
 
@@ -106,14 +108,15 @@ func fetchOidcAppsHTTPRoutes(ctx context.Context, c client.Client, object client
 
 	oidcHTTPRoutes := &gatewayv1.HTTPRouteList{}
 
-	if err := c.List(ctx, oidcHTTPRoutes,
+	err := c.List(ctx, oidcHTTPRoutes,
 		client.InNamespace(object.GetNamespace()),
 		client.MatchingLabelsSelector{
 			Selector: labels.SelectorFromSet(map[string]string{
 				constants.LabelKey: constants.LabelValue,
 			}),
 		},
-	); err != nil {
+	)
+	if err != nil {
 		return oidcHTTPRoutes, client.IgnoreNotFound(err)
 	}
 
@@ -132,7 +135,7 @@ func fetchOidcAppsSecrets(ctx context.Context, c client.Client, object client.Ob
 	error) {
 	oidcSecrets := &corev1.SecretList{}
 
-	if err := c.List(ctx, oidcSecrets,
+	err := c.List(ctx, oidcSecrets,
 		client.InNamespace(object.GetNamespace()),
 		client.MatchingLabelsSelector{
 			Selector: labels.SelectorFromSet(map[string]string{
@@ -140,7 +143,8 @@ func fetchOidcAppsSecrets(ctx context.Context, c client.Client, object client.Ob
 				constants.SecretLabelKey: constants.Oauth2LabelValue,
 			}),
 		},
-	); err != nil {
+	)
+	if err != nil {
 		return oidcSecrets, client.IgnoreNotFound(err)
 	}
 
@@ -168,9 +172,11 @@ func reconcileDeploymentDependencies(ctx context.Context, c client.Client, objec
 
 	// OAuth2 secret
 	oauth2Secret := oauth2SecretObject(object)
-	if err := reconcileOwnedResource(ctx, c, object, oauth2Secret, func() error {
+
+	err := reconcileOwnedResource(ctx, c, object, oauth2Secret, func() error {
 		return mutateOauth2Secret(oauth2Secret, object)
-	}); err != nil {
+	})
+	if err != nil {
 		return fmt.Errorf("failed to reconcile oauth2 secret: %w", err)
 	}
 
@@ -178,9 +184,11 @@ func reconcileDeploymentDependencies(ctx context.Context, c client.Client, objec
 	selectors := configuration.GetOIDCAppsControllerConfig().GetTargetLabelSelector(object)
 
 	oauth2Svc := oauth2ServiceObject(object)
-	if err := reconcileOwnedResource(ctx, c, object, oauth2Svc, func() error {
+
+	err = reconcileOwnedResource(ctx, c, object, oauth2Svc, func() error {
 		return mutateOauth2Service(oauth2Svc, selectors.MatchLabels)
-	}); err != nil {
+	})
+	if err != nil {
 		return fmt.Errorf("failed to reconcile oauth2 service: %w", err)
 	}
 
@@ -188,18 +196,22 @@ func reconcileDeploymentDependencies(ctx context.Context, c client.Client, objec
 	ns := fetchResourceAttributesNamespace(ctx, c, object)
 
 	rbacSecret := resourceAttributesSecretObject(object)
-	if err := reconcileOwnedResource(ctx, c, object, rbacSecret, func() error {
+
+	err = reconcileOwnedResource(ctx, c, object, rbacSecret, func() error {
 		return mutateResourceAttributesSecret(rbacSecret, object, ns)
-	}); err != nil {
+	})
+	if err != nil {
 		return fmt.Errorf("failed to reconcile resource attributes secret: %w", err)
 	}
 
 	// Optional kubeconfig secret
 	if needsKubeconfigSecret(object) {
 		kubeSecret := kubeconfigSecretObject(object)
-		if err := reconcileOwnedResource(ctx, c, object, kubeSecret, func() error {
+
+		err := reconcileOwnedResource(ctx, c, object, kubeSecret, func() error {
 			return mutateKubeconfigSecret(kubeSecret, object)
-		}); err != nil {
+		})
+		if err != nil {
 			return fmt.Errorf("failed to reconcile kubeconfig secret: %w", err)
 		}
 	}
@@ -207,9 +219,11 @@ func reconcileDeploymentDependencies(ctx context.Context, c client.Client, objec
 	// Optional OIDC CA bundle secret
 	if needsOidcCaBundleSecret(object) {
 		caSecret := oidcCaBundleSecretObject(object)
-		if err := reconcileOwnedResource(ctx, c, object, caSecret, func() error {
+
+		err := reconcileOwnedResource(ctx, c, object, caSecret, func() error {
 			return mutateOidcCaBundleSecret(caSecret, object)
-		}); err != nil {
+		})
+		if err != nil {
 			return fmt.Errorf("failed to reconcile oidc ca bundle secret: %w", err)
 		}
 	}
@@ -235,9 +249,11 @@ func reconcileIngressForDeployment(ctx context.Context, c client.Client, object 
 	}
 
 	ingress := ingressForDeploymentObject(object)
-	if err := reconcileOwnedResource(ctx, c, object, ingress, func() error {
+
+	err := reconcileOwnedResource(ctx, c, object, ingress, func() error {
 		return mutateIngressForDeployment(ingress, object)
-	}); err != nil {
+	})
+	if err != nil {
 		return fmt.Errorf("failed to reconcile oauth2 ingress: %w", err)
 	}
 
@@ -251,9 +267,11 @@ func reconcileIngressForStatefulSetPod(ctx context.Context, c client.Client, pod
 	}
 
 	ingress := ingressForStatefulSetPodObject(pod, object)
-	if err := reconcileOwnedResource(ctx, c, pod, ingress, func() error {
+
+	err := reconcileOwnedResource(ctx, c, pod, ingress, func() error {
 		return mutateIngressForStatefulSetPod(ingress, pod, object)
-	}); err != nil {
+	})
+	if err != nil {
 		return fmt.Errorf("failed to reconcile oauth2 ingress: %w", err)
 	}
 
@@ -266,9 +284,11 @@ func reconcileHTTPRouteForDeployment(ctx context.Context, c client.Client, objec
 	}
 
 	httpRoute := httpRouteForDeploymentObject(object)
-	if err := reconcileOwnedResource(ctx, c, object, httpRoute, func() error {
+
+	err := reconcileOwnedResource(ctx, c, object, httpRoute, func() error {
 		return mutateHTTPRouteForDeployment(httpRoute, object)
-	}); err != nil {
+	})
+	if err != nil {
 		return fmt.Errorf("failed to reconcile oauth2 httproute: %w", err)
 	}
 
@@ -282,9 +302,11 @@ func reconcileHTTPRouteForStatefulSetPod(ctx context.Context, c client.Client, p
 	}
 
 	httpRoute := httpRouteForStatefulSetPodObject(pod, object)
-	if err := reconcileOwnedResource(ctx, c, pod, httpRoute, func() error {
+
+	err := reconcileOwnedResource(ctx, c, pod, httpRoute, func() error {
 		return mutateHTTPRouteForStatefulSetPod(httpRoute, pod, object)
-	}); err != nil {
+	})
+	if err != nil {
 		return fmt.Errorf("failed to reconcile oauth2 httproute: %w", err)
 	}
 
@@ -298,9 +320,11 @@ func reconcileStatefulSetDependencies(ctx context.Context, c client.Client, obje
 
 	// OAuth2 secret
 	oauth2Secret := oauth2SecretObject(object)
-	if err := reconcileOwnedResource(ctx, c, object, oauth2Secret, func() error {
+
+	err := reconcileOwnedResource(ctx, c, object, oauth2Secret, func() error {
 		return mutateOauth2Secret(oauth2Secret, object)
-	}); err != nil {
+	})
+	if err != nil {
 		return fmt.Errorf("failed to reconcile oauth2 secret: %w", err)
 	}
 
@@ -331,9 +355,11 @@ func reconcileStatefulSetDependencies(ctx context.Context, c client.Client, obje
 		}
 
 		oauth2Svc := oauth2ServiceObject(&pod)
-		if err := reconcileOwnedResource(ctx, c, &pod, oauth2Svc, func() error {
+
+		err := reconcileOwnedResource(ctx, c, &pod, oauth2Svc, func() error {
 			return mutateOauth2Service(oauth2Svc, selectors)
-		}); err != nil {
+		})
+		if err != nil {
 			return fmt.Errorf("failed to reconcile oauth2 service: %w", err)
 		}
 
@@ -350,18 +376,22 @@ func reconcileStatefulSetDependencies(ctx context.Context, c client.Client, obje
 	ns := fetchResourceAttributesNamespace(ctx, c, object)
 
 	rbacSecret := resourceAttributesSecretObject(object)
-	if err := reconcileOwnedResource(ctx, c, object, rbacSecret, func() error {
+
+	err = reconcileOwnedResource(ctx, c, object, rbacSecret, func() error {
 		return mutateResourceAttributesSecret(rbacSecret, object, ns)
-	}); err != nil {
+	})
+	if err != nil {
 		return fmt.Errorf("failed to reconcile resource attributes secret: %w", err)
 	}
 
 	// Optional kubeconfig secret
 	if needsKubeconfigSecret(object) {
 		kubeSecret := kubeconfigSecretObject(object)
-		if err := reconcileOwnedResource(ctx, c, object, kubeSecret, func() error {
+
+		err := reconcileOwnedResource(ctx, c, object, kubeSecret, func() error {
 			return mutateKubeconfigSecret(kubeSecret, object)
-		}); err != nil {
+		})
+		if err != nil {
 			return fmt.Errorf("failed to reconcile kubeconfig secret: %w", err)
 		}
 	}
@@ -369,9 +399,11 @@ func reconcileStatefulSetDependencies(ctx context.Context, c client.Client, obje
 	// Optional OIDC CA bundle secret
 	if needsOidcCaBundleSecret(object) {
 		caSecret := oidcCaBundleSecretObject(object)
-		if err := reconcileOwnedResource(ctx, c, object, caSecret, func() error {
+
+		err := reconcileOwnedResource(ctx, c, object, caSecret, func() error {
 			return mutateOidcCaBundleSecret(caSecret, object)
-		}); err != nil {
+		})
+		if err != nil {
 			return fmt.Errorf("failed to reconcile oidc ca bundle secret: %w", err)
 		}
 	}

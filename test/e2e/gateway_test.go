@@ -22,10 +22,12 @@ var _ = Describe("Managed Gateway Test", Ordered, func() {
 		It("the controller shall create a managed Gateway resource", func(ctx SpecContext) {
 			Eventually(func() error {
 				gw := &gatewayv1.Gateway{}
-				if err := clt.Get(ctx, client.ObjectKey{
+
+				err := clt.Get(ctx, client.ObjectKey{
 					Name:      "test-managed-gateway",
 					Namespace: defaultNamespace,
-				}, gw); err != nil {
+				}, gw)
+				if err != nil {
 					return err
 				}
 
@@ -97,10 +99,11 @@ var _ = Describe("Managed Gateway Test", Ordered, func() {
 			Eventually(func() error {
 				httpRoutes := gatewayv1.HTTPRouteList{}
 
-				if err := clt.List(ctx, &httpRoutes,
+				err := clt.List(ctx, &httpRoutes,
 					client.InNamespace(defaultNamespace),
 					client.MatchingLabels{constants.LabelKey: constants.LabelValue},
-				); err != nil {
+				)
+				if err != nil {
 					return err
 				}
 

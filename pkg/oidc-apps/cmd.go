@@ -217,57 +217,35 @@ func RunController(ctx context.Context, o *Options) error {
 }
 
 func fetchPredicates(extensionConfig *configuration.OIDCAppsControllerConfig) predicate.GenerationChangedPredicate {
+	// matchOrLabeled accepts an object when it matches the extension configuration
+	// or already carries the controller's label.
+	matchOrLabeled := func(eventType string, o client.Object) bool {
+		if extensionConfig.Match(o) {
+			_log.V(9).Info(eventType+" event", "name", o.GetName(), "namespace", o.GetNamespace())
+
+			return true
+		}
+
+		_, found := o.GetLabels()[constants.LabelKey]
+
+		return found
+	}
+
 	once.Do(
 		func() {
 			predicates = predicate.GenerationChangedPredicate{
-
 				TypedFuncs: predicate.Funcs{
 					CreateFunc: func(e event.CreateEvent) bool {
-						if extensionConfig.Match(e.Object) {
-							_log.V(9).Info("create event", "name", e.Object.GetName(), "namespace", e.Object.GetNamespace())
-
-							return true
-						}
-
-						_, found := e.Object.GetLabels()[constants.LabelKey]
-
-						return found
+						return matchOrLabeled("create", e.Object)
 					},
 					DeleteFunc: func(e event.DeleteEvent) bool {
-						if extensionConfig.Match(e.Object) {
-							_log.V(9).Info("delete event", "name", e.Object.GetName(), "namespace",
-								e.Object.GetNamespace())
-
-							return true
-						}
-
-						_, found := e.Object.GetLabels()[constants.LabelKey]
-
-						return found
+						return matchOrLabeled("delete", e.Object)
 					},
 					UpdateFunc: func(e event.UpdateEvent) bool {
-						if extensionConfig.Match(e.ObjectNew) {
-							_log.V(9).Info("update event", "name", e.ObjectNew.GetName(), "namespace",
-								e.ObjectNew.GetNamespace())
-
-							return true
-						}
-
-						_, found := e.ObjectNew.GetLabels()[constants.LabelKey]
-
-						return found
+						return matchOrLabeled("update", e.ObjectNew)
 					},
 					GenericFunc: func(e event.GenericEvent) bool {
-						if extensionConfig.Match(e.Object) {
-							_log.V(9).Info("generic event", "name", e.Object.GetName(), "namespace",
-								e.Object.GetNamespace())
-
-							return true
-						}
-
-						_, found := e.Object.GetLabels()[constants.LabelKey]
-
-						return found
+						return matchOrLabeled("generic", e.Object)
 					},
 				},
 			}
@@ -483,22 +461,10 @@ func addWebhookCertificateManager(mgr manager.Manager, o *Options) error {
 // Add namespace && image pull secret reconcilers if the registry-secret parameter is present
 func addPrivateRegistrySecretControllers(mgr manager.Manager, o *Options) error {
 	if o.registrySecret != "" {
-		imagePullSecretPredicates := predicate.GenerationChangedPredicate{
-			TypedFuncs: predicate.Funcs{
-				CreateFunc: func(e event.CreateEvent) bool {
-					return e.Object.GetName() == o.registrySecret && e.Object.GetNamespace() == os.Getenv(constants.NAMESPACE)
-				},
-				UpdateFunc: func(e event.UpdateEvent) bool {
-					return e.ObjectNew.GetName() == o.registrySecret && e.ObjectNew.GetNamespace() == os.Getenv(constants.NAMESPACE)
-				},
-				DeleteFunc: func(e event.DeleteEvent) bool {
-					return e.Object.GetName() == o.registrySecret && e.Object.GetNamespace() == os.Getenv(constants.NAMESPACE)
-				},
-				GenericFunc: func(e event.GenericEvent) bool {
-					return e.Object.GetName() == o.registrySecret && e.Object.GetNamespace() == os.Getenv(constants.NAMESPACE)
-				},
-			},
-		}
+		controllerNamespace := os.Getenv(constants.NAMESPACE)
+		imagePullSecretPredicates := predicate.NewPredicateFuncs(func(obj client.Object) bool {
+			return obj.GetName() == o.registrySecret && obj.GetNamespace() == controllerNamespace
+		})
 
 		err := controllerruntime.NewControllerManagedBy(mgr).
 			Named("image-pull-secret").

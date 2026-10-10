@@ -63,6 +63,7 @@ func (r *ImagePullSecretReconciler) Reconcile(ctx context.Context, request recon
 		if target.Data == nil {
 			target.Data = map[string][]byte{}
 		}
+
 		target.Data[DOCKERCONFIGJSON] = secret.Data[DOCKERCONFIGJSON]
 
 		if err := r.Client.Update(ctx, target); err != nil {

@@ -19,7 +19,7 @@ Targets for enhancement are identified by using labels and/or namespace selector
 For example:
 
 ```yaml
-# oidc-apps configuration
+# oidc-apps configuration (supplied via the Helm chart's values)
 global:
   oauth2Proxy:
     scope: "openid email profile"
@@ -58,6 +58,21 @@ targets:
 ```
 
 ![image](images/oidc-apps.png)
+
+## Installation
+
+The controller is distributed as a Helm chart published as an OCI artifact to
+`oci://ghcr.io/nickytd/oidc-apps/charts`. Install it with your configuration
+(the `global` and `targets` values shown above):
+
+```bash
+helm install oidc-apps oci://ghcr.io/nickytd/oidc-apps/charts/oidc-apps \
+  --namespace oidc-apps-system --create-namespace \
+  --values values.yaml
+```
+
+See [charts/oidc-apps/values.yaml](charts/oidc-apps/values.yaml) for all
+configurable values.
 
 ## RBAC Authorization
 

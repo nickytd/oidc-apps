@@ -82,9 +82,11 @@ authenticated request using virtual resource attributes:
 - **apiGroup:** `authorization.oidc-apps.io`
 - **resource:** `oidc-apps`
 - **subresource:** target name (e.g., `grafana`, `prometheus`)
-- **verb:** `get`
+- **verb:** derived from the HTTP method — `get` for `GET`/`HEAD`,
+  `create` for `POST`/`PUT`/`PATCH`, etc.
 
-Grant access by binding users or groups to a ClusterRole:
+Grant the verbs matching the HTTP methods your users need by binding them to a
+ClusterRole:
 
 ```yaml
 apiVersion: rbac.authorization.k8s.io/v1

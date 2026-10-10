@@ -57,19 +57,24 @@ func (r *ImagePullSecretReconciler) Reconcile(ctx context.Context, request recon
 		return reconcile.Result{}, err
 	}
 
-	for _, imagePullSecret := range secretsList.Items {
-		imagePullSecret.StringData = map[string]string{
-			DOCKERCONFIGJSON: secret.StringData[DOCKERCONFIGJSON],
-		}
+	for i := range secretsList.Items {
+		target := &secretsList.Items[i]
 
-		if err := r.Client.Update(ctx, secret); err != nil {
-			_log.Error(err, "Cannot update secret",
-				"name", secret.GetName(),
-				"namespace", secret.GetNamespace(),
+		if target.Data == nil {
+			target.Data = map[string][]byte{}
+		}
+		target.Data[DOCKERCONFIGJSON] = secret.Data[DOCKERCONFIGJSON]
+
+		if err := r.Client.Update(ctx, target); err != nil {
+			_log.Error(err, "Cannot update image pull secret",
+				"name", target.GetName(),
+				"namespace", target.GetNamespace(),
 			)
+
+			continue
 		}
 
-		_log.V(9).Info("Updated", "name", secret.GetName(), "namespace", secret.GetNamespace())
+		_log.V(9).Info("Updated", "name", target.GetName(), "namespace", target.GetNamespace())
 	}
 
 	return reconcile.Result{}, nil

@@ -241,6 +241,11 @@ func fetchPredicates(extensionConfig *configuration.OIDCAppsControllerConfig) pr
 					DeleteFunc: func(e event.DeleteEvent) bool {
 						return matchOrLabeled("delete", e.Object)
 					},
+					// NOTE: this predicate is returned as a GenerationChangedPredicate,
+					// whose promoted Update() method gates update events on
+					// metadata.generation change and never calls this UpdateFunc.
+					// The closure is kept only for symmetry with the other event
+					// types; update filtering here is governed by generation change.
 					UpdateFunc: func(e event.UpdateEvent) bool {
 						return matchOrLabeled("update", e.ObjectNew)
 					},
@@ -477,7 +482,7 @@ func addPrivateRegistrySecretControllers(mgr manager.Manager, o *Options) error 
 		}
 
 		secretKey := types.NamespacedName{
-			Namespace: os.Getenv(constants.NAMESPACE),
+			Namespace: controllerNamespace,
 			Name:      o.registrySecret,
 		}
 

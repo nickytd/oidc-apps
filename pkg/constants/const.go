@@ -35,8 +35,6 @@ const (
 	SecretNameOidcCa = "oidc-ca"
 	// ServiceNameOauth2Service is the name of the oauth2 service
 	ServiceNameOauth2Service = "oauth2-service"
-	// IngressName is the name of the oauth2 ingress
-	IngressName = "oauth2-ingress"
 	// HTTPRouteName is the name of the oauth2 HTTPRoute
 	HTTPRouteName = "oauth2-httproute"
 	// ManagedGatewayName is the default name for the controller-managed Gateway resource

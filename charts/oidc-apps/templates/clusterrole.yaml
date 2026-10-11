@@ -32,9 +32,11 @@ rules:
   - apiGroups: ["gateway.networking.k8s.io"]
     resources: ["httproutes"]
     verbs: [ "create", "get", "list", "watch", "update", "patch", "delete" ]
+  {{- if .Values.global }}
   {{- if and .Values.global.gateway .Values.global.gateway.managed }}
   - apiGroups: ["gateway.networking.k8s.io"]
     resources: ["gateways"]
     verbs: [ "create", "get", "list", "watch", "update", "patch", "delete" ]
+  {{- end }}
   {{- end }}
 {{- end }}

@@ -5,7 +5,7 @@ package controllers
 
 import (
 	"context"
-	"errors"
+	"fmt"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -36,8 +36,8 @@ func deleteOwnedResources(ctx context.Context, c client.Client, object client.Ob
 	}
 
 	for _, s := range secrets.Items {
-		if err = c.Delete(ctx, &s); err != nil {
-			return errors.New("failed to delete")
+		if err = c.Delete(ctx, &s); client.IgnoreNotFound(err) != nil {
+			return fmt.Errorf("failed to delete secret %s/%s: %w", s.Namespace, s.Name, err)
 		}
 
 		_log.V(9).Info("Deleted", "name", s.Name, "namespace", s.Namespace)
@@ -49,8 +49,8 @@ func deleteOwnedResources(ctx context.Context, c client.Client, object client.Ob
 	}
 
 	for _, s := range ingresses.Items {
-		if err = c.Delete(ctx, &s); err != nil {
-			return errors.New("failed to delete")
+		if err = c.Delete(ctx, &s); client.IgnoreNotFound(err) != nil {
+			return fmt.Errorf("failed to delete ingress %s/%s: %w", s.Namespace, s.Name, err)
 		}
 
 		_log.V(9).Info("Deleted", "name", s.Name, "namespace", s.Namespace)
@@ -62,8 +62,8 @@ func deleteOwnedResources(ctx context.Context, c client.Client, object client.Ob
 	}
 
 	for _, s := range httpRoutes.Items {
-		if err = c.Delete(ctx, &s); err != nil {
-			return errors.New("failed to delete")
+		if err = c.Delete(ctx, &s); client.IgnoreNotFound(err) != nil {
+			return fmt.Errorf("failed to delete httproute %s/%s: %w", s.Namespace, s.Name, err)
 		}
 
 		_log.V(9).Info("Deleted", "name", s.Name, "namespace", s.Namespace)
@@ -75,8 +75,8 @@ func deleteOwnedResources(ctx context.Context, c client.Client, object client.Ob
 	}
 
 	for _, s := range services.Items {
-		if err = c.Delete(ctx, &s); err != nil {
-			return errors.New("failed to delete")
+		if err = c.Delete(ctx, &s); client.IgnoreNotFound(err) != nil {
+			return fmt.Errorf("failed to delete service %s/%s: %w", s.Namespace, s.Name, err)
 		}
 
 		_log.V(9).Info("Deleted", "name", s.Name, "namespace", s.Namespace)

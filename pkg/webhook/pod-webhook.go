@@ -77,7 +77,7 @@ func (p *PodMutator) Handle(ctx context.Context, req webhook.AdmissionRequest) w
 	// Add required annotations to pod spec template
 	addPodAnnotations(patch,
 		map[string]string{
-			constants.AnnotationHostKey: resolveHost(p.Config, rc),
+			constants.AnnotationHostKey: rc.GetHost(),
 		},
 	)
 
@@ -142,11 +142,11 @@ func (p *PodMutator) Handle(ctx context.Context, req webhook.AdmissionRequest) w
 	podIndex, present := patch.GetObjectMeta().GetLabels()["statefulset.kubernetes.io/pod-name"]
 
 	// When "present", the target pod is part of a statefulset.
-	// In this case, the oidc-apps-controller creates a new ingress for each pod and the oauth2-proxy redirect
+	// In this case, the oidc-apps-controller creates a new HTTPRoute for each pod and the oauth2-proxy redirect
 	// URL needs to reflect the target pod index. When the redirect URL is constructed the pod index is appended to the
 	// host name.
 	if present {
-		hostPrefix := resolveHost(p.Config, rc)
+		hostPrefix := rc.GetHost()
 		if rc.GetRedirectURL() != "" {
 			hostPrefix = rc.GetRedirectURL()
 			// It does container https:// prefix and /oauth2/callback suffix

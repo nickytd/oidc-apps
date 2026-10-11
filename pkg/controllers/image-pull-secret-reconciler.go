@@ -5,10 +5,12 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
@@ -37,6 +39,32 @@ func (r *ImagePullSecretReconciler) Reconcile(ctx context.Context, request recon
 
 	if secret.GetName() != r.SecretName {
 		return reconcile.Result{}, nil
+	}
+
+	// The propagated copies live in other namespaces and cannot carry owner references
+	// back to this source secret, so a finalizer drives their cleanup on deletion.
+	if !secret.GetDeletionTimestamp().IsZero() {
+		if !controllerutil.ContainsFinalizer(secret, constants.RegistrySecretFinalizer) {
+			return reconcile.Result{}, nil
+		}
+
+		if err := r.deletePropagatedSecrets(ctx, secret.GetNamespace()); err != nil {
+			return reconcile.Result{}, err
+		}
+
+		controllerutil.RemoveFinalizer(secret, constants.RegistrySecretFinalizer)
+
+		if err := r.Client.Update(ctx, secret); err != nil {
+			return reconcile.Result{}, fmt.Errorf("failed to remove finalizer: %w", err)
+		}
+
+		return reconcile.Result{}, nil
+	}
+
+	if controllerutil.AddFinalizer(secret, constants.RegistrySecretFinalizer) {
+		if err := r.Client.Update(ctx, secret); err != nil {
+			return reconcile.Result{}, fmt.Errorf("failed to add finalizer: %w", err)
+		}
 	}
 
 	secretsList := &corev1.SecretList{}
@@ -79,4 +107,45 @@ func (r *ImagePullSecretReconciler) Reconcile(ctx context.Context, request recon
 	}
 
 	return reconcile.Result{}, nil
+}
+
+// deletePropagatedSecrets removes the propagated registry secret copies in every namespace
+// except sourceNamespace (which holds the source secret being deleted).
+func (r *ImagePullSecretReconciler) deletePropagatedSecrets(ctx context.Context, sourceNamespace string) error {
+	_log := log.FromContext(ctx)
+
+	secretsList := &corev1.SecretList{}
+
+	err := r.Client.List(ctx, secretsList,
+		client.MatchingLabelsSelector{
+			Selector: labels.SelectorFromSet(
+				map[string]string{
+					constants.LabelKey:       constants.LabelValue,
+					constants.SecretLabelKey: constants.RegistrySecretLabelValue,
+				},
+			),
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("failed to list propagated image pull secrets: %w", err)
+	}
+
+	for i := range secretsList.Items {
+		target := &secretsList.Items[i]
+
+		// Never delete the source secret itself; only the propagated copies.
+		if target.GetNamespace() == sourceNamespace {
+			continue
+		}
+
+		if err := r.Client.Delete(ctx, target); client.IgnoreNotFound(err) != nil {
+			return fmt.Errorf("failed to delete propagated image pull secret %s/%s: %w",
+				target.GetNamespace(), target.GetName(), err)
+		}
+
+		_log.V(9).Info("Deleted propagated image pull secret",
+			"name", target.GetName(), "namespace", target.GetNamespace())
+	}
+
+	return nil
 }

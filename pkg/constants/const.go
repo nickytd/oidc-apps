@@ -59,6 +59,12 @@ const (
 	// RegistrySecretLabelValue is the value of the Label
 	RegistrySecretLabelValue = "registry-secret"
 
+	// RegistrySecretFinalizer blocks deletion of the source image pull secret until the
+	// propagated copies across target namespaces have been removed. Those copies cannot
+	// carry owner references to the source (cross-namespace ownership is not allowed), so
+	// Kubernetes garbage collection cannot clean them up.
+	RegistrySecretFinalizer = "oidc-application-controller/registry-secret"
+
 	// Oauth2VolumeName is the volume name of the oauth2-proxy configuration
 	Oauth2VolumeName = "oauth2-proxy"
 	// KubeRbacProxyVolumeName is the volume name of the kube-rbac-proxy configuration

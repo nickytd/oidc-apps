@@ -4,12 +4,10 @@
 package configuration
 
 import (
-	"context"
 	"os"
 	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/nickytd/oidc-apps/pkg/constants"
 	"github.com/nickytd/oidc-apps/pkg/randutils"
@@ -110,21 +108,32 @@ type RouteGroupKind struct {
 	Kind  string `json:"kind"`
 }
 
+// isHTTPRouteEnabled returns true if Gateway API HTTPRoute support is globally enabled
+func (rc *ResolvedConfig) isHTTPRouteEnabled() bool {
+	return rc.global.Gateway != nil &&
+		rc.global.Gateway.HTTPRoutes != nil &&
+		rc.global.Gateway.HTTPRoutes.Enabled
+}
+
+// isManagedGatewayEnabled returns true if the controller should create and manage a Gateway resource
+func (rc *ResolvedConfig) isManagedGatewayEnabled() bool {
+	return rc.isHTTPRouteEnabled() && rc.global.Gateway.Managed
+}
+
 // ShallCreateHTTPRoute returns true if the target workload shall create an HTTPRoute
-func (c *OIDCAppsControllerConfig) ShallCreateHTTPRoute(object client.Object) bool {
-	if !c.IsHTTPRouteEnabled() {
+func (rc *ResolvedConfig) ShallCreateHTTPRoute() bool {
+	if !rc.isHTTPRouteEnabled() {
 		return false
 	}
 
-	t := c.FetchTarget(context.Background(), object)
-	if t.HTTPRoute != nil {
-		if t.HTTPRoute.Create && len(t.HTTPRoute.ParentRefs) == 0 && !c.IsManagedGatewayEnabled() {
-			c.log.Info("WARNING: HTTPRoute configuration has empty parentRefs - HTTPRoute will not be attached to any Gateway",
-				"target", t.Name,
-				"object", object.GetNamespace()+"/"+object.GetName())
+	if rc.target.HTTPRoute != nil {
+		if rc.target.HTTPRoute.Create && len(rc.target.HTTPRoute.ParentRefs) == 0 && !rc.isManagedGatewayEnabled() {
+			rc.log.Info("WARNING: HTTPRoute configuration has empty parentRefs - HTTPRoute will not be attached to any Gateway",
+				"target", rc.target.Name,
+				"object", rc.object.GetNamespace()+"/"+rc.object.GetName())
 		}
 
-		return t.HTTPRoute.Create
+		return rc.target.HTTPRoute.Create
 	}
 
 	return false
@@ -149,17 +158,16 @@ func (c *OIDCAppsControllerConfig) GetManagedGatewayConf() *GatewayGlobalConf {
 }
 
 // GetHTTPRouteHost returns the host for the HTTPRoute for a given workload target
-func (c *OIDCAppsControllerConfig) GetHTTPRouteHost(object client.Object) string {
-	t := c.FetchTarget(context.Background(), object)
-	domain := c.Global.DomainName
+func (rc *ResolvedConfig) GetHTTPRouteHost() string {
+	domain := rc.global.DomainName
 
-	prefix := object.GetName() + "-" + object.GetNamespace()
-	if t.HTTPRoute != nil && t.HTTPRoute.HostPrefix != "" {
-		prefix = t.HTTPRoute.HostPrefix + "-" + randutils.GenerateSha256(object.GetName()+"-"+object.GetNamespace())
+	prefix := rc.object.GetName() + "-" + rc.object.GetNamespace()
+	if rc.target.HTTPRoute != nil && rc.target.HTTPRoute.HostPrefix != "" {
+		prefix = rc.target.HTTPRoute.HostPrefix + "-" + randutils.GenerateSha256(rc.object.GetName()+"-"+rc.object.GetNamespace())
 	}
 
-	if t.HTTPRoute != nil && t.HTTPRoute.Host != "" {
-		prefix, domain, _ = strings.Cut(t.HTTPRoute.Host, ".")
+	if rc.target.HTTPRoute != nil && rc.target.HTTPRoute.Host != "" {
+		prefix, domain, _ = strings.Cut(rc.target.HTTPRoute.Host, ".")
 	}
 
 	if domain == "" {
@@ -172,14 +180,13 @@ func (c *OIDCAppsControllerConfig) GetHTTPRouteHost(object client.Object) string
 // GetHTTPRouteParentRefs returns the parent references for the HTTPRoute for the given target.
 // When the target has no parentRefs and a managed gateway is enabled, returns a default
 // reference to the managed Gateway.
-func (c *OIDCAppsControllerConfig) GetHTTPRouteParentRefs(object client.Object) []HTTPRouteParentRef {
-	t := c.FetchTarget(context.Background(), object)
-	if t.HTTPRoute != nil && len(t.HTTPRoute.ParentRefs) > 0 {
-		return t.HTTPRoute.ParentRefs
+func (rc *ResolvedConfig) GetHTTPRouteParentRefs() []HTTPRouteParentRef {
+	if rc.target.HTTPRoute != nil && len(rc.target.HTTPRoute.ParentRefs) > 0 {
+		return rc.target.HTTPRoute.ParentRefs
 	}
 
-	if c.IsManagedGatewayEnabled() {
-		name := c.Global.Gateway.Name
+	if rc.isManagedGatewayEnabled() {
+		name := rc.global.Gateway.Name
 		if name == "" {
 			name = constants.ManagedGatewayName
 		}
@@ -196,20 +203,18 @@ func (c *OIDCAppsControllerConfig) GetHTTPRouteParentRefs(object client.Object) 
 }
 
 // GetHTTPRouteAnnotations returns the HTTPRoute annotations for the given target
-func (c *OIDCAppsControllerConfig) GetHTTPRouteAnnotations(object client.Object) map[string]string {
-	t := c.FetchTarget(context.Background(), object)
-	if t.HTTPRoute != nil && t.HTTPRoute.Annotations != nil {
-		return t.HTTPRoute.Annotations
+func (rc *ResolvedConfig) GetHTTPRouteAnnotations() map[string]string {
+	if rc.target.HTTPRoute != nil && rc.target.HTTPRoute.Annotations != nil {
+		return rc.target.HTTPRoute.Annotations
 	}
 
 	return nil
 }
 
 // GetHTTPRouteLabels returns the HTTPRoute labels for the given target
-func (c *OIDCAppsControllerConfig) GetHTTPRouteLabels(object client.Object) map[string]string {
-	t := c.FetchTarget(context.Background(), object)
-	if t.HTTPRoute != nil && t.HTTPRoute.Labels != nil {
-		return t.HTTPRoute.Labels
+func (rc *ResolvedConfig) GetHTTPRouteLabels() map[string]string {
+	if rc.target.HTTPRoute != nil && rc.target.HTTPRoute.Labels != nil {
+		return rc.target.HTTPRoute.Labels
 	}
 
 	return nil
@@ -217,10 +222,9 @@ func (c *OIDCAppsControllerConfig) GetHTTPRouteLabels(object client.Object) map[
 
 // GetHTTPRouteDefaultPath returns the default redirect path for the HTTPRoute of the given target.
 // The path must start with "/" to be valid; invalid paths are ignored.
-func (c *OIDCAppsControllerConfig) GetHTTPRouteDefaultPath(object client.Object) string {
-	t := c.FetchTarget(context.Background(), object)
-	if t.HTTPRoute != nil && isValidDefaultPath(t.HTTPRoute.DefaultPath) {
-		return t.HTTPRoute.DefaultPath
+func (rc *ResolvedConfig) GetHTTPRouteDefaultPath() string {
+	if rc.target.HTTPRoute != nil && isValidDefaultPath(rc.target.HTTPRoute.DefaultPath) {
+		return rc.target.HTTPRoute.DefaultPath
 	}
 
 	return ""

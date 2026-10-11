@@ -171,18 +171,20 @@ func reconcileDeploymentDependencies(ctx context.Context, c client.Client, cfg *
 		return nil
 	}
 
+	rc := cfg.Resolve(ctx, object)
+
 	// OAuth2 secret
 	oauth2Secret := oauth2SecretObject(object)
 
 	err := reconcileOwnedResource(ctx, c, object, oauth2Secret, func() error {
-		return mutateOauth2Secret(oauth2Secret, object, cfg)
+		return mutateOauth2Secret(oauth2Secret, rc)
 	})
 	if err != nil {
 		return fmt.Errorf("failed to reconcile oauth2 secret: %w", err)
 	}
 
 	// OAuth2 service
-	selectors := cfg.GetTargetLabelSelector(ctx, object)
+	selectors := rc.GetTargetLabelSelector()
 
 	oauth2Svc := oauth2ServiceObject(object)
 
@@ -206,11 +208,11 @@ func reconcileDeploymentDependencies(ctx context.Context, c client.Client, cfg *
 	}
 
 	// Optional kubeconfig secret
-	if needsKubeconfigSecret(object, cfg) {
+	if needsKubeconfigSecret(rc) {
 		kubeSecret := kubeconfigSecretObject(object)
 
 		err := reconcileOwnedResource(ctx, c, object, kubeSecret, func() error {
-			return mutateKubeconfigSecret(kubeSecret, object, cfg)
+			return mutateKubeconfigSecret(kubeSecret, rc)
 		})
 		if err != nil {
 			return fmt.Errorf("failed to reconcile kubeconfig secret: %w", err)
@@ -218,41 +220,41 @@ func reconcileDeploymentDependencies(ctx context.Context, c client.Client, cfg *
 	}
 
 	// Optional OIDC CA bundle secret
-	if needsOidcCaBundleSecret(object, cfg) {
+	if needsOidcCaBundleSecret(rc) {
 		caSecret := oidcCaBundleSecretObject(object)
 
 		err := reconcileOwnedResource(ctx, c, object, caSecret, func() error {
-			return mutateOidcCaBundleSecret(caSecret, object, cfg)
+			return mutateOidcCaBundleSecret(caSecret, rc)
 		})
 		if err != nil {
 			return fmt.Errorf("failed to reconcile oidc ca bundle secret: %w", err)
 		}
 	}
 
-	if err := reconcileIngressForDeployment(ctx, c, cfg, object); err != nil {
+	if err := reconcileIngressForDeployment(ctx, c, rc, object); err != nil {
 		return err
 	}
 
-	if err := reconcileHTTPRouteForDeployment(ctx, c, cfg, object); err != nil {
+	if err := reconcileHTTPRouteForDeployment(ctx, c, rc, object); err != nil {
 		return err
 	}
 
 	if c.Scheme().IsGroupRegistered("autoscaling.k8s.io") {
-		return patchVpa(ctx, c, cfg, object)
+		return patchVpa(ctx, c, rc, object)
 	}
 
 	return nil
 }
 
-func reconcileIngressForDeployment(ctx context.Context, c client.Client, cfg *configuration.OIDCAppsControllerConfig, object client.Object) error {
-	if !cfg.ShallCreateIngress(object) {
+func reconcileIngressForDeployment(ctx context.Context, c client.Client, rc *configuration.ResolvedConfig, object client.Object) error {
+	if !rc.ShallCreateIngress() {
 		return nil
 	}
 
 	ingress := ingressForDeploymentObject(object)
 
 	err := reconcileOwnedResource(ctx, c, object, ingress, func() error {
-		return mutateIngressForDeployment(ingress, object, cfg)
+		return mutateIngressForDeployment(ingress, object, rc)
 	})
 	if err != nil {
 		return fmt.Errorf("failed to reconcile oauth2 ingress: %w", err)
@@ -261,16 +263,16 @@ func reconcileIngressForDeployment(ctx context.Context, c client.Client, cfg *co
 	return nil
 }
 
-func reconcileIngressForStatefulSetPod(ctx context.Context, c client.Client, cfg *configuration.OIDCAppsControllerConfig, pod *corev1.Pod,
+func reconcileIngressForStatefulSetPod(ctx context.Context, c client.Client, rc *configuration.ResolvedConfig, pod *corev1.Pod,
 	object client.Object) error {
-	if !cfg.ShallCreateIngress(object) {
+	if !rc.ShallCreateIngress() {
 		return nil
 	}
 
 	ingress := ingressForStatefulSetPodObject(pod, object)
 
 	err := reconcileOwnedResource(ctx, c, pod, ingress, func() error {
-		return mutateIngressForStatefulSetPod(ingress, pod, object, cfg)
+		return mutateIngressForStatefulSetPod(ingress, pod, rc)
 	})
 	if err != nil {
 		return fmt.Errorf("failed to reconcile oauth2 ingress: %w", err)
@@ -279,15 +281,15 @@ func reconcileIngressForStatefulSetPod(ctx context.Context, c client.Client, cfg
 	return nil
 }
 
-func reconcileHTTPRouteForDeployment(ctx context.Context, c client.Client, cfg *configuration.OIDCAppsControllerConfig, object client.Object) error {
-	if !cfg.ShallCreateHTTPRoute(object) {
+func reconcileHTTPRouteForDeployment(ctx context.Context, c client.Client, rc *configuration.ResolvedConfig, object client.Object) error {
+	if !rc.ShallCreateHTTPRoute() {
 		return nil
 	}
 
 	httpRoute := httpRouteForDeploymentObject(object)
 
 	err := reconcileOwnedResource(ctx, c, object, httpRoute, func() error {
-		return mutateHTTPRouteForDeployment(httpRoute, object, cfg)
+		return mutateHTTPRouteForDeployment(httpRoute, object, rc)
 	})
 	if err != nil {
 		return fmt.Errorf("failed to reconcile oauth2 httproute: %w", err)
@@ -296,16 +298,16 @@ func reconcileHTTPRouteForDeployment(ctx context.Context, c client.Client, cfg *
 	return nil
 }
 
-func reconcileHTTPRouteForStatefulSetPod(ctx context.Context, c client.Client, cfg *configuration.OIDCAppsControllerConfig, pod *corev1.Pod,
+func reconcileHTTPRouteForStatefulSetPod(ctx context.Context, c client.Client, rc *configuration.ResolvedConfig, pod *corev1.Pod,
 	object client.Object) error {
-	if !cfg.ShallCreateHTTPRoute(object) {
+	if !rc.ShallCreateHTTPRoute() {
 		return nil
 	}
 
 	httpRoute := httpRouteForStatefulSetPodObject(pod, object)
 
 	err := reconcileOwnedResource(ctx, c, pod, httpRoute, func() error {
-		return mutateHTTPRouteForStatefulSetPod(httpRoute, pod, object, cfg)
+		return mutateHTTPRouteForStatefulSetPod(httpRoute, pod, rc)
 	})
 	if err != nil {
 		return fmt.Errorf("failed to reconcile oauth2 httproute: %w", err)
@@ -319,11 +321,13 @@ func reconcileStatefulSetDependencies(ctx context.Context, c client.Client, cfg 
 		return nil
 	}
 
+	rc := cfg.Resolve(ctx, object)
+
 	// OAuth2 secret
 	oauth2Secret := oauth2SecretObject(object)
 
 	err := reconcileOwnedResource(ctx, c, object, oauth2Secret, func() error {
-		return mutateOauth2Secret(oauth2Secret, object, cfg)
+		return mutateOauth2Secret(oauth2Secret, rc)
 	})
 	if err != nil {
 		return fmt.Errorf("failed to reconcile oauth2 secret: %w", err)
@@ -346,9 +350,11 @@ func reconcileStatefulSetDependencies(ctx context.Context, c client.Client, cfg 
 		}
 
 		// OAuth2 service per pod
+		rcPod := cfg.Resolve(ctx, &pod)
+
 		selectors := client.MatchingLabels{}
-		if cfg.GetTargetLabelSelector(ctx, &pod) != nil {
-			selectors = cfg.GetTargetLabelSelector(ctx, &pod).MatchLabels
+		if rcPod.GetTargetLabelSelector() != nil {
+			selectors = rcPod.GetTargetLabelSelector().MatchLabels
 		}
 
 		if statefulSetPodNameLabel, ok := pod.GetLabels()["statefulset.kubernetes.io/pod-name"]; ok {
@@ -364,11 +370,11 @@ func reconcileStatefulSetDependencies(ctx context.Context, c client.Client, cfg 
 			return fmt.Errorf("failed to reconcile oauth2 service: %w", err)
 		}
 
-		if err := reconcileIngressForStatefulSetPod(ctx, c, cfg, &pod, object); err != nil {
+		if err := reconcileIngressForStatefulSetPod(ctx, c, rc, &pod, object); err != nil {
 			return err
 		}
 
-		if err := reconcileHTTPRouteForStatefulSetPod(ctx, c, cfg, &pod, object); err != nil {
+		if err := reconcileHTTPRouteForStatefulSetPod(ctx, c, rc, &pod, object); err != nil {
 			return err
 		}
 	}
@@ -386,11 +392,11 @@ func reconcileStatefulSetDependencies(ctx context.Context, c client.Client, cfg 
 	}
 
 	// Optional kubeconfig secret
-	if needsKubeconfigSecret(object, cfg) {
+	if needsKubeconfigSecret(rc) {
 		kubeSecret := kubeconfigSecretObject(object)
 
 		err := reconcileOwnedResource(ctx, c, object, kubeSecret, func() error {
-			return mutateKubeconfigSecret(kubeSecret, object, cfg)
+			return mutateKubeconfigSecret(kubeSecret, rc)
 		})
 		if err != nil {
 			return fmt.Errorf("failed to reconcile kubeconfig secret: %w", err)
@@ -398,11 +404,11 @@ func reconcileStatefulSetDependencies(ctx context.Context, c client.Client, cfg 
 	}
 
 	// Optional OIDC CA bundle secret
-	if needsOidcCaBundleSecret(object, cfg) {
+	if needsOidcCaBundleSecret(rc) {
 		caSecret := oidcCaBundleSecretObject(object)
 
 		err := reconcileOwnedResource(ctx, c, object, caSecret, func() error {
-			return mutateOidcCaBundleSecret(caSecret, object, cfg)
+			return mutateOidcCaBundleSecret(caSecret, rc)
 		})
 		if err != nil {
 			return fmt.Errorf("failed to reconcile oidc ca bundle secret: %w", err)
@@ -410,15 +416,15 @@ func reconcileStatefulSetDependencies(ctx context.Context, c client.Client, cfg 
 	}
 
 	if c.Scheme().IsGroupRegistered("autoscaling.k8s.io") {
-		return patchVpa(ctx, c, cfg, object)
+		return patchVpa(ctx, c, rc, object)
 	}
 
 	return nil
 }
 
-func patchVpa(ctx context.Context, c client.Client, cfg *configuration.OIDCAppsControllerConfig, object client.Object) error {
+func patchVpa(ctx context.Context, c client.Client, rc *configuration.ResolvedConfig, object client.Object) error {
 	vpa := &autoscalerv1.VerticalPodAutoscalerList{}
-	targetLabels := cfg.GetTargetLabelSelector(ctx, object)
+	targetLabels := rc.GetTargetLabelSelector()
 
 	listOpts := []client.ListOption{
 		client.MatchingLabels(targetLabels.MatchLabels),

@@ -62,20 +62,22 @@ func (p *PodMutator) Handle(ctx context.Context, req webhook.AdmissionRequest) w
 
 	_log.Info("handling pod admission request")
 
+	rc := p.Config.Resolve(ctx, owner)
+
 	patch := pod.DeepCopy()
-	clientID := p.Config.GetClientID(owner)
-	issuerURL := p.Config.GetOidcIssuerURL(owner)
-	upstream := p.Config.GetUpstreamTarget(owner)
+	clientID := rc.GetClientID()
+	issuerURL := rc.GetOidcIssuerURL()
+	upstream := rc.GetUpstreamTarget()
 	upstreamURL := buildUpstreamURL(upstream, patch.Spec)
 	suffix := fetchTargetSuffix(owner)
 
 	// Add the OIDC annotation to the deployment template
-	addAnnotations(patch, p.Config)
+	addAnnotations(patch, p.Config, rc)
 
 	// Add required annotations to pod spec template
 	addPodAnnotations(patch,
 		map[string]string{
-			constants.AnnotationHostKey: resolveHost(owner, p.Config),
+			constants.AnnotationHostKey: resolveHost(p.Config, rc),
 		},
 	)
 
@@ -93,10 +95,10 @@ func (p *PodMutator) Handle(ctx context.Context, req webhook.AdmissionRequest) w
 		&patch.Spec,
 	)
 
-	if shallAddOidcCaSecretName(owner, p.Config) {
+	if shallAddOidcCaSecretName(rc) {
 		addProjectedSecretSourceVolume(
 			constants.Oauth2VolumeName,
-			fetchOidcCASecretName(suffix, owner, p.Config),
+			fetchOidcCASecretName(suffix, rc),
 			&patch.Spec,
 		)
 	}
@@ -109,28 +111,28 @@ func (p *PodMutator) Handle(ctx context.Context, req webhook.AdmissionRequest) w
 	)
 
 	// Add an optional kubeconfig secret for the kube-rbac-proxy
-	if shallAddKubeConfigSecretName(owner, p.Config) {
+	if shallAddKubeConfigSecretName(rc) {
 		addProjectedSecretSourceVolume(
 			constants.KubeRbacProxyVolumeName,
-			fetchKubconfigSecretName(suffix, owner, p.Config),
+			fetchKubconfigSecretName(suffix, rc),
 			&patch.Spec,
 		)
 	}
 
 	// Add an optional oidc ca secret for the kube-rbac-proxy
-	if shallAddOidcCaSecretName(owner, p.Config) {
+	if shallAddOidcCaSecretName(rc) {
 		addProjectedSecretSourceVolume(
 			constants.KubeRbacProxyVolumeName,
-			fetchOidcCASecretName(suffix, owner, p.Config),
+			fetchOidcCASecretName(suffix, rc),
 			&patch.Spec,
 		)
 	}
 
 	// Add the OAUTH2 proxy sidecar to the pod template
-	addProxyContainer(constants.ContainerNameOauth2Proxy, &patch.Spec, getOIDCProxyContainer(_log, &patch.Spec, owner, p.Config))
+	addProxyContainer(constants.ContainerNameOauth2Proxy, &patch.Spec, getOIDCProxyContainer(_log, &patch.Spec, owner, rc))
 
 	// Add the kube-rbac-proxy sidecar to the pod template
-	addProxyContainer(constants.ContainerNameKubeRbacProxy, &patch.Spec, getKubeRbacProxyContainer(clientID, issuerURL, upstreamURL, patch, owner, p.Config))
+	addProxyContainer(constants.ContainerNameKubeRbacProxy, &patch.Spec, getKubeRbacProxyContainer(clientID, issuerURL, upstreamURL, patch, rc))
 
 	// Add image pull secret if the proxy container images are served from private registry
 	if len(p.ImagePullSecret) > 0 {
@@ -144,9 +146,9 @@ func (p *PodMutator) Handle(ctx context.Context, req webhook.AdmissionRequest) w
 	// URL needs to reflect the target pod index. When the redirect URL is constructed the pod index is appended to the
 	// host name.
 	if present {
-		hostPrefix := resolveHost(owner, p.Config)
-		if p.Config.GetRedirectURL(owner) != "" {
-			hostPrefix = p.Config.GetRedirectURL(owner)
+		hostPrefix := resolveHost(p.Config, rc)
+		if rc.GetRedirectURL() != "" {
+			hostPrefix = rc.GetRedirectURL()
 			// It does container https:// prefix and /oauth2/callback suffix
 			hostPrefix = strings.TrimPrefix(hostPrefix, "https://")
 			hostPrefix = strings.TrimSuffix(hostPrefix, "/oauth2/callback")

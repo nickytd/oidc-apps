@@ -97,8 +97,6 @@ func (c *OIDCAppsControllerConfig) logMatchError(err error, message string, t Ta
 }
 
 // GetTargetLabelSelector returns the label selector for the given target
-func (c *OIDCAppsControllerConfig) GetTargetLabelSelector(ctx context.Context, o client.Object) *metav1.LabelSelector {
-	t := c.FetchTarget(ctx, o)
-
-	return t.LabelSelector
+func (rc *ResolvedConfig) GetTargetLabelSelector() *metav1.LabelSelector {
+	return rc.target.LabelSelector
 }

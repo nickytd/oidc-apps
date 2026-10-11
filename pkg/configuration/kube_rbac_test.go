@@ -30,7 +30,7 @@ func TestGetKubeConfigStrNilKubeRbacProxy(t *testing.T) {
 	cfg.client = fake.NewClientBuilder().Build()
 
 	target := getDeployment("test-target")
-	g.Expect(cfg.GetKubeConfigStr(target)).To(Equal(""),
+	g.Expect(cfg.Resolve(t.Context(), target).GetKubeConfigStr()).To(Equal(""),
 		"GetKubeConfigStr should return empty string when KubeRbacProxy is nil")
 }
 
@@ -50,7 +50,7 @@ func TestGetKubeConfigStrEmptyKubeConfigStr(t *testing.T) {
 	cfg.client = fake.NewClientBuilder().Build()
 
 	target := getDeployment("any")
-	g.Expect(cfg.GetKubeConfigStr(target)).To(Equal(""),
+	g.Expect(cfg.Resolve(t.Context(), target).GetKubeConfigStr()).To(Equal(""),
 		"GetKubeConfigStr should return empty string when KubeConfigStr is empty")
 }
 
@@ -67,7 +67,7 @@ func TestGetKubeSecretNameNilKubeRbacProxy(t *testing.T) {
 	cfg.client = fake.NewClientBuilder().Build()
 
 	target := getDeployment("any")
-	g.Expect(cfg.GetKubeSecretName(target)).To(Equal(""),
+	g.Expect(cfg.Resolve(t.Context(), target).GetKubeSecretName()).To(Equal(""),
 		"GetKubeSecretName should return empty string when KubeRbacProxy is nil")
 }
 
@@ -86,11 +86,11 @@ func TestGetKubeSecretNameEmptyRef(t *testing.T) {
 	cfg.client = fake.NewClientBuilder().Build()
 
 	target := getDeployment("any")
-	g.Expect(cfg.GetKubeSecretName(target)).To(Equal(""),
+	g.Expect(cfg.Resolve(t.Context(), target).GetKubeSecretName()).To(Equal(""),
 		"GetKubeSecretName should return empty string when KubeSecretRef is nil")
 
 	cfg.Global.KubeRbacProxy.KubeSecretRef = &corev1.SecretReference{Name: ""}
-	g.Expect(cfg.GetKubeSecretName(target)).To(Equal(""),
+	g.Expect(cfg.Resolve(t.Context(), target).GetKubeSecretName()).To(Equal(""),
 		"GetKubeSecretName should return empty string when KubeSecretRef.Name is empty")
 }
 
@@ -122,7 +122,7 @@ func TestGetKubeConfigStrTargetOverridesGlobal(t *testing.T) {
 	cfg.client = fake.NewClientBuilder().Build()
 
 	target := getDeployment("target-with-override")
-	g.Expect(cfg.GetKubeConfigStr(target)).To(Equal("target-kubeconfig"),
+	g.Expect(cfg.Resolve(t.Context(), target).GetKubeConfigStr()).To(Equal("target-kubeconfig"),
 		"per-target KubeConfigStr should take precedence over global")
 }
 
@@ -149,7 +149,7 @@ func TestGetKubeConfigStrGlobalFallback(t *testing.T) {
 	cfg.client = fake.NewClientBuilder().Build()
 
 	target := getDeployment("target-no-override")
-	g.Expect(cfg.GetKubeConfigStr(target)).To(Equal("global-kubeconfig"),
+	g.Expect(cfg.Resolve(t.Context(), target).GetKubeConfigStr()).To(Equal("global-kubeconfig"),
 		"GetKubeConfigStr should fall back to global when target has no KubeRbacProxy config")
 }
 
@@ -180,6 +180,6 @@ func TestGetKubeSecretNameTargetOverridesGlobal(t *testing.T) {
 	cfg.client = fake.NewClientBuilder().Build()
 
 	target := getDeployment("target-with-secret")
-	g.Expect(cfg.GetKubeSecretName(target)).To(Equal("target-secret"),
+	g.Expect(cfg.Resolve(t.Context(), target).GetKubeSecretName()).To(Equal("target-secret"),
 		"per-target KubeSecretRef should take precedence over global")
 }

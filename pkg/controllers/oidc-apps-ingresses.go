@@ -29,12 +29,11 @@ func ingressForDeploymentObject(object client.Object) *networkingv1.Ingress {
 	}
 }
 
-func mutateIngressForDeployment(ingress *networkingv1.Ingress, object client.Object, cfg *configuration.OIDCAppsControllerConfig) error {
+func mutateIngressForDeployment(ingress *networkingv1.Ingress, object client.Object, rc *configuration.ResolvedConfig) error {
 	suffix := randutils.GenerateSha256(object.GetName() + "-" + object.GetNamespace())
-	extConfig := cfg
-	ingressClassName := new(extConfig.GetIngressClassName(object))
-	ingressTLSSecretName := extConfig.GetIngressTLSSecretName(object)
-	host := extConfig.GetHost(object)
+	ingressClassName := new(rc.GetIngressClassName())
+	ingressTLSSecretName := rc.GetIngressTLSSecretName()
+	host := rc.GetHost()
 
 	ingress.Labels = map[string]string{
 		constants.LabelKey: constants.LabelValue,
@@ -72,13 +71,13 @@ func mutateIngressForDeployment(ingress *networkingv1.Ingress, object client.Obj
 		},
 	}
 
-	if annotations := extConfig.GetIngressAnnotations(object); len(annotations) > 0 {
+	if annotations := rc.GetIngressAnnotations(); len(annotations) > 0 {
 		ingress.Annotations = annotations
 	}
 
-	applyIngressDefaultPathRedirect(ingress, object, cfg)
+	applyIngressDefaultPathRedirect(ingress, rc)
 
-	extraLabels := extConfig.GetIngressLabels(object)
+	extraLabels := rc.GetIngressLabels()
 	maps.Copy(ingress.Labels, extraLabels)
 
 	return nil
@@ -96,11 +95,10 @@ func ingressForStatefulSetPodObject(pod *corev1.Pod, object client.Object) *netw
 	}
 }
 
-func mutateIngressForStatefulSetPod(ingress *networkingv1.Ingress, pod *corev1.Pod, object client.Object, cfg *configuration.OIDCAppsControllerConfig) error {
+func mutateIngressForStatefulSetPod(ingress *networkingv1.Ingress, pod *corev1.Pod, rc *configuration.ResolvedConfig) error {
 	suffix := randutils.GenerateSha256(pod.GetName() + "-" + pod.GetNamespace())
-	extConfig := cfg
-	ingressClassName := new(extConfig.GetIngressClassName(object))
-	ingressTLSSecretName := extConfig.GetIngressTLSSecretName(object)
+	ingressClassName := new(rc.GetIngressClassName())
+	ingressTLSSecretName := rc.GetIngressTLSSecretName()
 	index := fetchStrIndexIfPresent(pod)
 
 	hostPrefix, ok := pod.GetAnnotations()[constants.AnnotationHostKey]
@@ -147,20 +145,20 @@ func mutateIngressForStatefulSetPod(ingress *networkingv1.Ingress, pod *corev1.P
 		},
 	}
 
-	if annotations := extConfig.GetIngressAnnotations(object); len(annotations) > 0 {
+	if annotations := rc.GetIngressAnnotations(); len(annotations) > 0 {
 		ingress.Annotations = annotations
 	}
 
-	applyIngressDefaultPathRedirect(ingress, object, cfg)
+	applyIngressDefaultPathRedirect(ingress, rc)
 
-	extraLabels := extConfig.GetIngressLabels(object)
+	extraLabels := rc.GetIngressLabels()
 	maps.Copy(ingress.Labels, extraLabels)
 
 	return nil
 }
 
-func applyIngressDefaultPathRedirect(ingress *networkingv1.Ingress, object client.Object, cfg *configuration.OIDCAppsControllerConfig) {
-	defaultPath := cfg.GetIngressDefaultPath(object)
+func applyIngressDefaultPathRedirect(ingress *networkingv1.Ingress, rc *configuration.ResolvedConfig) {
+	defaultPath := rc.GetIngressDefaultPath()
 	key := "nginx.ingress.kubernetes.io/configuration-snippet"
 
 	if defaultPath == "" {

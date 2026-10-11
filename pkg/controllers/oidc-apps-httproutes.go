@@ -29,11 +29,10 @@ func httpRouteForDeploymentObject(object client.Object) *gatewayv1.HTTPRoute {
 	}
 }
 
-func mutateHTTPRouteForDeployment(httpRoute *gatewayv1.HTTPRoute, object client.Object, cfg *configuration.OIDCAppsControllerConfig) error {
+func mutateHTTPRouteForDeployment(httpRoute *gatewayv1.HTTPRoute, object client.Object, rc *configuration.ResolvedConfig) error {
 	suffix := randutils.GenerateSha256(object.GetName() + "-" + object.GetNamespace())
-	extConfig := cfg
-	host := extConfig.GetHTTPRouteHost(object)
-	parentRefs := extConfig.GetHTTPRouteParentRefs(object)
+	host := rc.GetHTTPRouteHost()
+	parentRefs := rc.GetHTTPRouteParentRefs()
 
 	httpRoute.Labels = map[string]string{
 		constants.LabelKey: constants.LabelValue,
@@ -67,13 +66,13 @@ func mutateHTTPRouteForDeployment(httpRoute *gatewayv1.HTTPRoute, object client.
 		},
 	}
 
-	if annotations := extConfig.GetHTTPRouteAnnotations(object); len(annotations) > 0 {
+	if annotations := rc.GetHTTPRouteAnnotations(); len(annotations) > 0 {
 		httpRoute.Annotations = annotations
 	}
 
-	applyHTTPRouteDefaultPathRedirect(httpRoute, object, cfg)
+	applyHTTPRouteDefaultPathRedirect(httpRoute, rc)
 
-	extraLabels := extConfig.GetHTTPRouteLabels(object)
+	extraLabels := rc.GetHTTPRouteLabels()
 	maps.Copy(httpRoute.Labels, extraLabels)
 
 	return nil
@@ -91,10 +90,9 @@ func httpRouteForStatefulSetPodObject(pod *corev1.Pod, object client.Object) *ga
 	}
 }
 
-func mutateHTTPRouteForStatefulSetPod(httpRoute *gatewayv1.HTTPRoute, pod *corev1.Pod, object client.Object, cfg *configuration.OIDCAppsControllerConfig) error {
+func mutateHTTPRouteForStatefulSetPod(httpRoute *gatewayv1.HTTPRoute, pod *corev1.Pod, rc *configuration.ResolvedConfig) error {
 	suffix := randutils.GenerateSha256(pod.GetName() + "-" + pod.GetNamespace())
-	extConfig := cfg
-	parentRefs := extConfig.GetHTTPRouteParentRefs(object)
+	parentRefs := rc.GetHTTPRouteParentRefs()
 	index := fetchStrIndexIfPresent(pod)
 
 	hostPrefix, ok := pod.GetAnnotations()[constants.AnnotationHostKey]
@@ -110,7 +108,7 @@ func mutateHTTPRouteForStatefulSetPod(httpRoute *gatewayv1.HTTPRoute, pod *corev
 	}
 	httpRoute.Spec = gatewayv1.HTTPRouteSpec{
 		CommonRouteSpec: gatewayv1.CommonRouteSpec{
-			ParentRefs: convertParentRefs(parentRefs, object.GetNamespace()),
+			ParentRefs: convertParentRefs(parentRefs, pod.GetNamespace()),
 		},
 		Hostnames: []gatewayv1.Hostname{gatewayv1.Hostname(podHost)},
 		Rules: []gatewayv1.HTTPRouteRule{
@@ -137,20 +135,20 @@ func mutateHTTPRouteForStatefulSetPod(httpRoute *gatewayv1.HTTPRoute, pod *corev
 		},
 	}
 
-	if annotations := extConfig.GetHTTPRouteAnnotations(object); len(annotations) > 0 {
+	if annotations := rc.GetHTTPRouteAnnotations(); len(annotations) > 0 {
 		httpRoute.Annotations = annotations
 	}
 
-	applyHTTPRouteDefaultPathRedirect(httpRoute, object, cfg)
+	applyHTTPRouteDefaultPathRedirect(httpRoute, rc)
 
-	extraLabels := extConfig.GetHTTPRouteLabels(object)
+	extraLabels := rc.GetHTTPRouteLabels()
 	maps.Copy(httpRoute.Labels, extraLabels)
 
 	return nil
 }
 
-func applyHTTPRouteDefaultPathRedirect(httpRoute *gatewayv1.HTTPRoute, object client.Object, cfg *configuration.OIDCAppsControllerConfig) {
-	defaultPath := cfg.GetHTTPRouteDefaultPath(object)
+func applyHTTPRouteDefaultPathRedirect(httpRoute *gatewayv1.HTTPRoute, rc *configuration.ResolvedConfig) {
+	defaultPath := rc.GetHTTPRouteDefaultPath()
 	if defaultPath == "" {
 		return
 	}

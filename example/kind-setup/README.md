@@ -2,7 +2,7 @@
 
 This example demonstrates the oidc-apps controller protecting a Grafana instance
 using [Dex](https://dexidp.io/) as the OIDC identity provider and
-[Envoy Gateway](https://gateway.envoyproxy.io/) (Gateway API) for ingress.
+[Envoy Gateway](https://gateway.envoyproxy.io/) (Gateway API) as the routing entry-point.
 
 ## Architecture
 

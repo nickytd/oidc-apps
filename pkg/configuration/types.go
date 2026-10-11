@@ -66,21 +66,8 @@ type Target struct {
 	LabelSelector     *metav1.LabelSelector `json:"labelSelector,omitzero"`
 	TargetPort        intstr.IntOrString    `json:"targetPort"`
 	TargetProtocol    string                `json:"targetProtocol,omitzero"`
-	Ingress           *IngressConf          `json:"ingress,omitzero"`
 	HTTPRoute         *HTTPRouteConf        `json:"httpRoute,omitzero"`
 	Global
-}
-
-// IngressConf holds configuration for the ingress entry-point
-type IngressConf struct {
-	Create           bool                   `json:"create,omitzero"`
-	HostPrefix       string                 `json:"hostPrefix,omitzero"`
-	Host             string                 `json:"host,omitzero"`
-	Annotations      map[string]string      `json:"annotations,omitzero"`
-	Labels           map[string]string      `json:"labels,omitzero"`
-	TLSSecretRef     corev1.SecretReference `json:"tlsSecretRef,omitzero"`
-	IngressClassName string                 `json:"ingressClassName,omitzero"`
-	DefaultPath      string                 `json:"defaultPath,omitzero"`
 }
 
 // HTTPRouteConf holds configuration for the Gateway API HTTPRoute entry-point

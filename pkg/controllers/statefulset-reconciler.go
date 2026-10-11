@@ -38,7 +38,14 @@ func (s *StatefulSetReconciler) Reconcile(ctx context.Context, request reconcile
 	_log.V(9).Info("handling statefulset reconcile request")
 
 	if !configuration.GetOIDCAppsControllerConfig().Match(reconciledStatefulSet) {
-		_log.V(9).Info("Reconciled statefulset is not an oidc-application-controller target, returning ...")
+		_log.V(9).Info("Reconciled statefulset is no longer an oidc-application-controller target, pruning owned resources ...")
+
+		// The statefulset still exists but no longer matches the targeting
+		// configuration, so owner-reference garbage collection will not fire.
+		// Prune the previously created owned resources explicitly.
+		if err := deleteOwnedResources(ctx, s.Client, reconciledStatefulSet); err != nil {
+			return reconcile.Result{}, err
+		}
 
 		return reconcile.Result{}, nil
 	}
@@ -47,17 +54,9 @@ func (s *StatefulSetReconciler) Reconcile(ctx context.Context, request reconcile
 		return reconcile.Result{}, nil
 	}
 
-	// Check for deletion & handle cleanup of the dependencies
-	if !reconciledStatefulSet.GetDeletionTimestamp().IsZero() {
-		_log.V(9).Info("Remove owned resources")
-
-		if err := deleteOwnedResources(ctx, s.Client, reconciledStatefulSet); err != nil {
-			return reconcile.Result{}, err
-		}
-
-		return reconcile.Result{}, nil
-	}
-
+	// On deletion the owned resources carry owner references to this statefulset
+	// (and its pods), so Kubernetes garbage collection removes them automatically.
+	// The dependency reconcile below is a no-op once the deletion timestamp is set.
 	if err := reconcileStatefulSetDependencies(ctx, s.Client, reconciledStatefulSet); err != nil {
 		return reconcile.Result{}, err
 	}

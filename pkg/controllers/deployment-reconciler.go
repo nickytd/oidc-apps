@@ -39,7 +39,14 @@ func (d *DeploymentReconciler) Reconcile(ctx context.Context, request reconcile.
 
 	if reconciledDeployment.GetLabels() != nil {
 		if !configuration.GetOIDCAppsControllerConfig().Match(reconciledDeployment) {
-			_log.V(9).Info("reconciled deployment is not an oidc-application-controller target, returning ...")
+			_log.V(9).Info("reconciled deployment is no longer an oidc-application-controller target, pruning owned resources ...")
+
+			// The deployment still exists but no longer matches the targeting
+			// configuration, so owner-reference garbage collection will not fire.
+			// Prune the previously created owned resources explicitly.
+			if err := deleteOwnedResources(ctx, d.Client, reconciledDeployment); err != nil {
+				return reconcile.Result{}, err
+			}
 
 			return reconcile.Result{}, nil
 		}
@@ -49,17 +56,9 @@ func (d *DeploymentReconciler) Reconcile(ctx context.Context, request reconcile.
 		return reconcile.Result{}, nil
 	}
 
-	// Check for deletion & handle cleanup of the dependencies
-	if !reconciledDeployment.GetDeletionTimestamp().IsZero() {
-		_log.V(9).Info("Remove owned resources")
-
-		if err := deleteOwnedResources(ctx, d.Client, reconciledDeployment); err != nil {
-			return reconcile.Result{}, err
-		}
-
-		return reconcile.Result{}, nil
-	}
-
+	// On deletion the owned resources carry owner references to this deployment,
+	// so Kubernetes garbage collection removes them automatically. The dependency
+	// reconcile below is a no-op once the deletion timestamp is set.
 	if err := reconcileDeploymentDependencies(ctx, d.Client, reconciledDeployment); err != nil {
 		return reconcile.Result{}, err
 	}

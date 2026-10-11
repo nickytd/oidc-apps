@@ -131,7 +131,8 @@ func (c *OIDCAppsControllerConfig) ShallCreateHTTPRoute(object client.Object) bo
 
 // IsHTTPRouteEnabled returns true if Gateway API HTTPRoute support is globally enabled
 func (c *OIDCAppsControllerConfig) IsHTTPRouteEnabled() bool {
-	return c.Global.Gateway != nil &&
+	return c != nil &&
+		c.Global.Gateway != nil &&
 		c.Global.Gateway.HTTPRoutes != nil &&
 		c.Global.Gateway.HTTPRoutes.Enabled
 }

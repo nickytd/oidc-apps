@@ -10,11 +10,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/nickytd/oidc-apps/pkg/constants"
@@ -121,5 +123,74 @@ func TestImagePullSecretReconcile(t *testing.T) {
 			NamespacedName: types.NamespacedName{Namespace: testControllerNS, Name: testRegistrySecret},
 		})
 		require.NoError(t, err)
+	})
+
+	t.Run("adds the finalizer to the source secret", func(t *testing.T) {
+		src := sourceSecret("new-credentials")
+		c := newFakeClient(t, src)
+
+		r := &ImagePullSecretReconciler{Client: c, SecretName: testRegistrySecret}
+
+		_, err := r.Reconcile(context.Background(), reconcile.Request{
+			NamespacedName: types.NamespacedName{Namespace: testControllerNS, Name: testRegistrySecret},
+		})
+		require.NoError(t, err)
+
+		got := &corev1.Secret{}
+		require.NoError(t, c.Get(context.Background(),
+			types.NamespacedName{Namespace: testControllerNS, Name: testRegistrySecret}, got))
+		assert.True(t, controllerutil.ContainsFinalizer(got, constants.RegistrySecretFinalizer),
+			"source secret must carry the registry-secret finalizer")
+	})
+
+	t.Run("deletes propagated copies and removes the finalizer on deletion", func(t *testing.T) {
+		src := sourceSecret("new-credentials")
+		src.Finalizers = []string{constants.RegistrySecretFinalizer}
+		target := labeledTarget("target-secret", "stale")
+		c := newFakeClient(t, src, target)
+
+		// Deleting a finalized object sets the deletion timestamp and keeps the object.
+		require.NoError(t, c.Delete(context.Background(), src))
+
+		r := &ImagePullSecretReconciler{Client: c, SecretName: testRegistrySecret}
+
+		_, err := r.Reconcile(context.Background(), reconcile.Request{
+			NamespacedName: types.NamespacedName{Namespace: testControllerNS, Name: testRegistrySecret},
+		})
+		require.NoError(t, err)
+
+		// The propagated copy in another namespace must be deleted.
+		err = c.Get(context.Background(),
+			types.NamespacedName{Namespace: testTargetNS, Name: "target-secret"}, &corev1.Secret{})
+		assert.True(t, apierrors.IsNotFound(err), "propagated copy should be deleted")
+
+		// With the finalizer removed, the source secret is now gone too.
+		err = c.Get(context.Background(),
+			types.NamespacedName{Namespace: testControllerNS, Name: testRegistrySecret}, &corev1.Secret{})
+		assert.True(t, apierrors.IsNotFound(err),
+			"source secret should be collected once the finalizer is removed")
+	})
+
+	t.Run("does not delete the source secret in its own namespace", func(t *testing.T) {
+		src := sourceSecret("new-credentials")
+		src.Finalizers = []string{constants.RegistrySecretFinalizer}
+		// A labeled secret that happens to live in the source namespace must be treated as the
+		// source, not a propagated copy, and therefore never deleted by the cleanup.
+		sibling := labeledTarget("target-secret", "stale")
+		sibling.Namespace = testControllerNS
+		c := newFakeClient(t, src, sibling)
+
+		require.NoError(t, c.Delete(context.Background(), src))
+
+		r := &ImagePullSecretReconciler{Client: c, SecretName: testRegistrySecret}
+
+		_, err := r.Reconcile(context.Background(), reconcile.Request{
+			NamespacedName: types.NamespacedName{Namespace: testControllerNS, Name: testRegistrySecret},
+		})
+		require.NoError(t, err)
+
+		require.NoError(t, c.Get(context.Background(),
+			types.NamespacedName{Namespace: testControllerNS, Name: "target-secret"}, &corev1.Secret{}),
+			"a labeled secret in the source namespace must not be deleted")
 	})
 }

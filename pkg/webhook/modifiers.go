@@ -37,14 +37,14 @@ func getImage(envVar, defaultImage string) string {
 	return defaultImage
 }
 
-func addAnnotations(target client.Object, cfg *configuration.OIDCAppsControllerConfig, rc *configuration.ResolvedConfig) {
+func addAnnotations(target client.Object, _ *configuration.OIDCAppsControllerConfig, rc *configuration.ResolvedConfig) {
 	annotations := target.GetAnnotations()
 	if len(annotations) == 0 {
 		annotations = make(map[string]string, 5)
 	}
 
 	annotations[constants.AnnotationKey] = target.GetName()
-	annotations[constants.AnnotationHostKey] = resolveHost(cfg, rc)
+	annotations[constants.AnnotationHostKey] = rc.GetHost()
 	annotations[constants.AnnotationTargetKey] = rc.GetUpstreamTarget()
 	annotations[constants.AnnotationSuffixKey] = fetchTargetSuffix(target)
 	annotations[constants.AnnotationOauth2SecretChecksumKey] = get2ProxySecretChecksum(rc)
@@ -488,12 +488,4 @@ func shallAddOidcCaSecretName(rc *configuration.ResolvedConfig) bool {
 	}
 
 	return rc.GetOidcCASecretName() != ""
-}
-
-func resolveHost(cfg *configuration.OIDCAppsControllerConfig, rc *configuration.ResolvedConfig) string {
-	if cfg.IsHTTPRouteEnabled() {
-		return rc.GetHTTPRouteHost()
-	}
-
-	return rc.GetHost()
 }

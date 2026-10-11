@@ -496,7 +496,6 @@ var _ = Describe("Cookie Secret Deterministic Generation Tests", func() {
 			extCfg := &configuration.OIDCAppsControllerConfig{
 				Global: configuration.Global{
 					DomainName: "example.org",
-					Gateway:    &configuration.GatewayGlobalConf{HTTPRoutes: &configuration.HTTPRoutesConf{Enabled: true}},
 					Oauth2Proxy: &configuration.Oauth2ProxyConfig{
 						ClientID:      "client-id",
 						ClientSecret:  "client-secret",

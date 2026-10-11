@@ -29,8 +29,6 @@ global:
   gateway:
     managed: true
     gatewayClassName: envoy
-    httpRoutes:
-      enabled: true
     listeners:
       - name: https
         protocol: HTTPS
@@ -56,6 +54,12 @@ targets:
     httpRoute:
       create: true
 ```
+
+> **Note:** As of chart v0.4.0, Kubernetes `networking.k8s.io/Ingress` is no
+> longer supported. Routing is handled exclusively via the Gateway API
+> (`HTTPRoute`). The Gateway API CRDs must be installed in the cluster. The
+> `global.gateway.httpRoutes.enabled` flag and per-target `ingress:` config
+> have been removed; migrate `ingress:` blocks to `httpRoute:`.
 
 ![image](images/oidc-apps.png)
 

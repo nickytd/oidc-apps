@@ -13,8 +13,6 @@ global:
   gateway:
     managed: true
     gatewayClassName: envoy
-    httpRoutes:
-      enabled: true
     listeners:
       - name: https
         protocol: HTTPS

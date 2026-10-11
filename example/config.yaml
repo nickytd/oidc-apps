@@ -69,21 +69,18 @@ targets:
     # The final target upstream protocol (http,https)
     # TODO: the configuration shall support adding trusted CAs for the upstream communication
     targetProtocol:
-    # Target ingress entry-point
-    ingress:
+    # Target HTTPRoute entry-point
+    httpRoute:
       create: #false
-      # Target URL prefix, to concatenate to the domainName, if not uses the target {{name}}-{{namespace}}
       hostPrefix: ""
-      # Target host for the ingress if differ from the {{hostPrefix}} + {{domainName}}
       host:
-      # Target ingress annotations for the ingress controller
       annotations: {}
-      # Target ingress labels for the ingress controller
       labels: {}
-      # TLS Secret for front ssl termination
-      tlsSecretRef:
-      # Ingress Class Name
-      ingressClassName:
+      parentRefs: []
+      # - name: my-gateway
+      #   namespace: gateway-system
+      #   sectionName: https
+      defaultPath:
     # Optional target oauth2 configuration.
     # It overwrites the cluster wide {{global}} for this target
     oauth2Proxy:

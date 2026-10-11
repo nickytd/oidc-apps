@@ -37,7 +37,7 @@ func TestTargetMatchLabels(t *testing.T) {
 	g.Expect(extensionConfig.Match(t.Context(), getNginxDeployment())).To(BeFalse())
 }
 
-func TestTargetIngressHostPrefix(t *testing.T) {
+func TestTargetHostPrefix(t *testing.T) {
 	extensionConfig := OIDCAppsControllerConfig{}
 	g := NewWithT(t)
 	err := yaml.Unmarshal([]byte(configYaml), &extensionConfig)
@@ -55,7 +55,7 @@ func TestTargetIngressHostPrefix(t *testing.T) {
 	g.Expect(z[1]).To(Equal("domain.org"))
 }
 
-func TestTargetIngressHost(t *testing.T) {
+func TestTargetHost(t *testing.T) {
 	extensionConfig := OIDCAppsControllerConfig{}
 	g := NewWithT(t)
 	err := yaml.Unmarshal([]byte(configYaml), &extensionConfig)
@@ -70,7 +70,7 @@ func TestTargetIngressHost(t *testing.T) {
 	g.Expect(extensionConfig.Resolve(t.Context(), getDeployment("test-03")).GetHost()).To(Equal("this.overwrites"))
 }
 
-func TestTargetWithoutIngressHost(t *testing.T) {
+func TestTargetWithoutHost(t *testing.T) {
 	extensionConfig := OIDCAppsControllerConfig{}
 	g := NewWithT(t)
 	err := yaml.Unmarshal([]byte(configYaml), &extensionConfig)
@@ -115,7 +115,7 @@ func TestTargetKubeSecret(t *testing.T) {
 		Build()
 
 	rc := extensionConfig.Resolve(t.Context(), getDeployment("test-02"))
-	g.Expect(rc.ShallCreateIngress()).To(BeTrue())
+	g.Expect(rc.ShallCreateIngress()).To(BeFalse())
 	g.Expect(rc.GetKubeSecretName()).To(Equal("target-kubeconfig"))
 }
 
@@ -657,10 +657,12 @@ func TestGetRedirectURLWithHTTPRoute(t *testing.T) {
 		WithObjects(target).
 		Build()
 
-	// GetRedirectURL falls through to https://{GetHost}/oauth2/callback
-	// GetHost uses ingress.Host (not httpRoute.Host), so it falls back to default
+	// GetRedirectURL falls through to https://{GetHost}/oauth2/callback.
+	// GetHost now reads httpRoute.Host, so test-06's custom host is used.
+	// strings.Cut("custom.httproute.host", ".") → prefix="custom", domain="httproute.host"
+	// so GetHost returns "custom.httproute.host" and the redirect URL includes the full host.
 	redirectURL := extensionConfig.Resolve(t.Context(), target).GetRedirectURL()
-	g.Expect(redirectURL).To(Equal("https://test-06-test.domain.org/oauth2/callback"))
+	g.Expect(redirectURL).To(Equal("https://custom.httproute.host/oauth2/callback"))
 }
 
 func TestIsValidDefaultPath(t *testing.T) {

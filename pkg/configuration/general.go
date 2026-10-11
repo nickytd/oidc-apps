@@ -4,6 +4,7 @@
 package configuration
 
 import (
+	"regexp"
 	"strings"
 
 	"github.com/nickytd/oidc-apps/pkg/randutils"
@@ -14,12 +15,12 @@ func (rc *ResolvedConfig) GetHost() string {
 	domain := rc.global.DomainName
 
 	prefix := rc.object.GetName() + "-" + rc.object.GetNamespace()
-	if rc.target.Ingress != nil && rc.target.Ingress.HostPrefix != "" {
-		prefix = rc.target.Ingress.HostPrefix + "-" + randutils.GenerateSha256(rc.object.GetName()+"-"+rc.object.GetNamespace())
+	if rc.target.HTTPRoute != nil && rc.target.HTTPRoute.HostPrefix != "" {
+		prefix = rc.target.HTTPRoute.HostPrefix + "-" + randutils.GenerateSha256(rc.object.GetName()+"-"+rc.object.GetNamespace())
 	}
 
-	if rc.target.Ingress != nil && rc.target.Ingress.Host != "" {
-		prefix, domain, _ = strings.Cut(rc.target.Ingress.Host, ".")
+	if rc.target.HTTPRoute != nil && rc.target.HTTPRoute.Host != "" {
+		prefix, domain, _ = strings.Cut(rc.target.HTTPRoute.Host, ".")
 	}
 
 	if domain == "" {
@@ -48,4 +49,12 @@ func (rc *ResolvedConfig) GetUpstreamTarget() string {
 	_, _ = b.WriteString(rc.target.TargetPort.String())
 
 	return b.String()
+}
+
+const maxDefaultPathLength = 32
+
+var validDefaultPathRe = regexp.MustCompile(`^/[-a-zA-Z0-9/_.~]+$`)
+
+func isValidDefaultPath(path string) bool {
+	return len(path) <= maxDefaultPathLength && validDefaultPathRe.MatchString(path)
 }

@@ -3,10 +3,6 @@
 
 package configuration
 
-import (
-	"regexp"
-)
-
 // ShallCreateIngress returns true if the target workload shall create an ingress
 func (rc *ResolvedConfig) ShallCreateIngress() bool {
 	if rc.target.Ingress != nil {
@@ -60,12 +56,4 @@ func (rc *ResolvedConfig) GetIngressDefaultPath() string {
 	}
 
 	return ""
-}
-
-const maxDefaultPathLength = 32
-
-var validDefaultPathRe = regexp.MustCompile(`^/[-a-zA-Z0-9/_.~]+$`)
-
-func isValidDefaultPath(path string) bool {
-	return len(path) <= maxDefaultPathLength && validDefaultPathRe.MatchString(path)
 }

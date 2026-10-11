@@ -11,7 +11,6 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	autoscalerv1 "k8s.io/autoscaler/vertical-pod-autoscaler/pkg/apis/autoscaling.k8s.io/v1"
@@ -73,40 +72,9 @@ func fetchOidcAppsServices(ctx context.Context, c client.Client, object client.O
 	return &corev1.ServiceList{Items: ownedServices}, nil
 }
 
-func fetchOidcAppsIngress(ctx context.Context, c client.Client, object client.Object) (*networkingv1.IngressList,
-	error) {
-	oidcIngress := &networkingv1.IngressList{}
-
-	err := c.List(ctx, oidcIngress,
-		client.InNamespace(object.GetNamespace()),
-		client.MatchingLabelsSelector{
-			Selector: labels.SelectorFromSet(map[string]string{
-				constants.LabelKey: constants.LabelValue,
-			}),
-		},
-	)
-	if err != nil {
-		return oidcIngress, client.IgnoreNotFound(err)
-	}
-
-	ownedIngresses := make([]networkingv1.Ingress, 0, len(oidcIngress.Items))
-
-	for _, ingress := range oidcIngress.Items {
-		if isAnOwnedResource(object, &ingress) {
-			ownedIngresses = append(ownedIngresses, ingress)
-		}
-	}
-
-	return &networkingv1.IngressList{Items: ownedIngresses}, nil
-}
-
-func fetchOidcAppsHTTPRoutes(ctx context.Context, c client.Client, cfg *configuration.OIDCAppsControllerConfig,
+func fetchOidcAppsHTTPRoutes(ctx context.Context, c client.Client, _ *configuration.OIDCAppsControllerConfig,
 	object client.Object) (*gatewayv1.HTTPRouteList,
 	error) {
-	if !cfg.IsHTTPRouteEnabled() {
-		return &gatewayv1.HTTPRouteList{}, nil
-	}
-
 	oidcHTTPRoutes := &gatewayv1.HTTPRouteList{}
 
 	err := c.List(ctx, oidcHTTPRoutes,
@@ -165,7 +133,7 @@ func fetchResourceAttributesNamespace(_ context.Context, _ client.Client, object
 }
 
 // reconcileDeploymentDependencies is the function responsible for managing authentication & authorization dependencies.
-// It reconciles the needed secrets, ingresses and services.
+// It reconciles the needed secrets, httproutes and services.
 func reconcileDeploymentDependencies(ctx context.Context, c client.Client, cfg *configuration.OIDCAppsControllerConfig, object *appsv1.Deployment) error {
 	if !object.GetDeletionTimestamp().IsZero() {
 		return nil
@@ -231,51 +199,12 @@ func reconcileDeploymentDependencies(ctx context.Context, c client.Client, cfg *
 		}
 	}
 
-	if err := reconcileIngressForDeployment(ctx, c, rc, object); err != nil {
-		return err
-	}
-
 	if err := reconcileHTTPRouteForDeployment(ctx, c, rc, object); err != nil {
 		return err
 	}
 
 	if c.Scheme().IsGroupRegistered("autoscaling.k8s.io") {
 		return patchVpa(ctx, c, rc, object)
-	}
-
-	return nil
-}
-
-func reconcileIngressForDeployment(ctx context.Context, c client.Client, rc *configuration.ResolvedConfig, object client.Object) error {
-	if !rc.ShallCreateIngress() {
-		return nil
-	}
-
-	ingress := ingressForDeploymentObject(object)
-
-	err := reconcileOwnedResource(ctx, c, object, ingress, func() error {
-		return mutateIngressForDeployment(ingress, object, rc)
-	})
-	if err != nil {
-		return fmt.Errorf("failed to reconcile oauth2 ingress: %w", err)
-	}
-
-	return nil
-}
-
-func reconcileIngressForStatefulSetPod(ctx context.Context, c client.Client, rc *configuration.ResolvedConfig, pod *corev1.Pod,
-	object client.Object) error {
-	if !rc.ShallCreateIngress() {
-		return nil
-	}
-
-	ingress := ingressForStatefulSetPodObject(pod, object)
-
-	err := reconcileOwnedResource(ctx, c, pod, ingress, func() error {
-		return mutateIngressForStatefulSetPod(ingress, pod, rc)
-	})
-	if err != nil {
-		return fmt.Errorf("failed to reconcile oauth2 ingress: %w", err)
 	}
 
 	return nil
@@ -368,10 +297,6 @@ func reconcileStatefulSetDependencies(ctx context.Context, c client.Client, cfg 
 		})
 		if err != nil {
 			return fmt.Errorf("failed to reconcile oauth2 service: %w", err)
-		}
-
-		if err := reconcileIngressForStatefulSetPod(ctx, c, rc, &pod, object); err != nil {
-			return err
 		}
 
 		if err := reconcileHTTPRouteForStatefulSetPod(ctx, c, rc, &pod, object); err != nil {

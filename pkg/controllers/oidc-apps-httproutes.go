@@ -31,7 +31,7 @@ func httpRouteForDeploymentObject(object client.Object) *gatewayv1.HTTPRoute {
 
 func mutateHTTPRouteForDeployment(httpRoute *gatewayv1.HTTPRoute, object client.Object, rc *configuration.ResolvedConfig) error {
 	suffix := randutils.GenerateSha256(object.GetName() + "-" + object.GetNamespace())
-	host := rc.GetHTTPRouteHost()
+	host := rc.GetHost()
 	parentRefs := rc.GetHTTPRouteParentRefs()
 
 	httpRoute.Labels = map[string]string{

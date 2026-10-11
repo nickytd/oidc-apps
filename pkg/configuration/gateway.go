@@ -5,18 +5,14 @@ package configuration
 
 import (
 	"os"
-	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/nickytd/oidc-apps/pkg/constants"
-	"github.com/nickytd/oidc-apps/pkg/randutils"
 )
 
 // GatewayGlobalConf holds global configuration for Gateway API support
 type GatewayGlobalConf struct {
-	// HTTPRoutes controls whether HTTPRoute resources are created
-	HTTPRoutes *HTTPRoutesConf `json:"httpRoutes,omitzero"`
 	// Managed controls whether the controller creates and manages a Gateway resource
 	Managed bool `json:"managed,omitzero"`
 	// Name is the name of the managed Gateway (defaults to constants.ManagedGatewayName)
@@ -58,11 +54,6 @@ type GatewayParametersRef struct {
 	Kind string `json:"kind"`
 	// Name of the referent.
 	Name string `json:"name"`
-}
-
-// HTTPRoutesConf holds configuration for HTTPRoute support
-type HTTPRoutesConf struct {
-	Enabled bool `json:"enabled,omitzero"`
 }
 
 // GatewayListener mirrors gateway.networking.k8s.io/v1.Listener
@@ -108,24 +99,13 @@ type RouteGroupKind struct {
 	Kind  string `json:"kind"`
 }
 
-// isHTTPRouteEnabled returns true if Gateway API HTTPRoute support is globally enabled
-func (rc *ResolvedConfig) isHTTPRouteEnabled() bool {
-	return rc.global.Gateway != nil &&
-		rc.global.Gateway.HTTPRoutes != nil &&
-		rc.global.Gateway.HTTPRoutes.Enabled
-}
-
 // isManagedGatewayEnabled returns true if the controller should create and manage a Gateway resource
 func (rc *ResolvedConfig) isManagedGatewayEnabled() bool {
-	return rc.isHTTPRouteEnabled() && rc.global.Gateway.Managed
+	return rc.global.Gateway != nil && rc.global.Gateway.Managed
 }
 
 // ShallCreateHTTPRoute returns true if the target workload shall create an HTTPRoute
 func (rc *ResolvedConfig) ShallCreateHTTPRoute() bool {
-	if !rc.isHTTPRouteEnabled() {
-		return false
-	}
-
 	if rc.target.HTTPRoute != nil {
 		if rc.target.HTTPRoute.Create && len(rc.target.HTTPRoute.ParentRefs) == 0 && !rc.isManagedGatewayEnabled() {
 			rc.log.Info("WARNING: HTTPRoute configuration has empty parentRefs - HTTPRoute will not be attached to any Gateway",
@@ -139,42 +119,14 @@ func (rc *ResolvedConfig) ShallCreateHTTPRoute() bool {
 	return false
 }
 
-// IsHTTPRouteEnabled returns true if Gateway API HTTPRoute support is globally enabled
-func (c *OIDCAppsControllerConfig) IsHTTPRouteEnabled() bool {
-	return c != nil &&
-		c.Global.Gateway != nil &&
-		c.Global.Gateway.HTTPRoutes != nil &&
-		c.Global.Gateway.HTTPRoutes.Enabled
-}
-
 // IsManagedGatewayEnabled returns true if the controller should create and manage a Gateway resource
 func (c *OIDCAppsControllerConfig) IsManagedGatewayEnabled() bool {
-	return c.IsHTTPRouteEnabled() && c.Global.Gateway.Managed
+	return c != nil && c.Global.Gateway != nil && c.Global.Gateway.Managed
 }
 
 // GetManagedGatewayConf returns the Gateway configuration, or nil if not configured
 func (c *OIDCAppsControllerConfig) GetManagedGatewayConf() *GatewayGlobalConf {
 	return c.Global.Gateway
-}
-
-// GetHTTPRouteHost returns the host for the HTTPRoute for a given workload target
-func (rc *ResolvedConfig) GetHTTPRouteHost() string {
-	domain := rc.global.DomainName
-
-	prefix := rc.object.GetName() + "-" + rc.object.GetNamespace()
-	if rc.target.HTTPRoute != nil && rc.target.HTTPRoute.HostPrefix != "" {
-		prefix = rc.target.HTTPRoute.HostPrefix + "-" + randutils.GenerateSha256(rc.object.GetName()+"-"+rc.object.GetNamespace())
-	}
-
-	if rc.target.HTTPRoute != nil && rc.target.HTTPRoute.Host != "" {
-		prefix, domain, _ = strings.Cut(rc.target.HTTPRoute.Host, ".")
-	}
-
-	if domain == "" {
-		return prefix
-	}
-
-	return strings.Join([]string{prefix, domain}, ".")
 }
 
 // GetHTTPRouteParentRefs returns the parent references for the HTTPRoute for the given target.

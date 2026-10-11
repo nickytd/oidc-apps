@@ -62,7 +62,7 @@ targets:
     oidcCASecretRef:
       name: "target-oidc-ca"
 
-  # A target with specific ingress host
+  # A target with specific httpRoute host
   - name: test-03
     namespaceSelector:
       matchLabels:
@@ -73,7 +73,7 @@ targets:
     httpRoute:
       host: "this.overwrites"
 
-  # A target without explicit ingress host
+  # A target without explicit host
   - name: test-04
     namespaceSelector:
       matchLabels:
@@ -124,20 +124,6 @@ targets:
       create: true
       hostPrefix: "test-07-prefix"
 
-  # A target with ingress defaultPath
-  - name: test-08
-    namespaceSelector:
-      matchLabels:
-        kubernetes.io/metadata.name: test
-    labelSelector:
-      matchLabels:
-        app.kubernetes.io/name: test-08
-    ingress:
-      create: true
-      defaultPath: "/select/vmui"
-      tlsSecretRef:
-        name: "ingress-tls"
-
   # A target with HTTPRoute defaultPath
   - name: test-09
     namespaceSelector:
@@ -152,27 +138,6 @@ targets:
       parentRefs:
         - name: "my-gateway"
           namespace: "gateway-system"
-
-  # A target with ingress annotations and labels
-  - name: test-10
-    namespaceSelector:
-      matchLabels:
-        kubernetes.io/metadata.name: test
-    labelSelector:
-      matchLabels:
-        app.kubernetes.io/name: test-10
-    targetPort: 3000
-    ingress:
-      create: true
-      annotations:
-        nginx.ingress.kubernetes.io/rewrite-target: "/"
-        cert-manager.io/cluster-issuer: "letsencrypt"
-      labels:
-        app.kubernetes.io/component: "ingress"
-        environment: "production"
-      tlsSecretRef:
-        name: "ingress-tls"
-      ingressClassName: "nginx"
 
   # A target with HTTPRoute annotations, labels and managed gateway fallback
   - name: test-11

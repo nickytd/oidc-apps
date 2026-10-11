@@ -29,33 +29,31 @@ func oauth2SecretObject(object client.Object) *corev1.Secret {
 	}
 }
 
-func mutateOauth2Secret(secret *corev1.Secret, object client.Object, cfg *configuration.OIDCAppsControllerConfig) error {
-	extConfig := cfg
-
+func mutateOauth2Secret(secret *corev1.Secret, rc *configuration.ResolvedConfig) error {
 	var oauth2Cfg string
 
-	switch extConfig.GetClientSecret(object) {
+	switch rc.GetClientSecret() {
 	case "":
 		oauth2Cfg = configuration.NewOAuth2Config(
-			configuration.WithClientID(extConfig.GetClientID(object)),
+			configuration.WithClientID(rc.GetClientID()),
 			configuration.WithClientSecretFile("/dev/null"),
-			configuration.WithScope(extConfig.GetScope(object)),
-			configuration.WithRedirectURL(extConfig.GetRedirectURL(object)),
-			configuration.WithOidcIssuerURL(extConfig.GetOidcIssuerURL(object)),
-			configuration.EnableSslInsecureSkipVerify(extConfig.GetSslInsecureSkipVerify(object)),
-			configuration.EnableInsecureOidcSkipIssuerVerification(extConfig.GetInsecureOidcSkipIssuerVerification(object)),
-			configuration.EnableInsecureOidcSkipNonce(extConfig.GetInsecureOidcSkipNonce(object)),
+			configuration.WithScope(rc.GetScope()),
+			configuration.WithRedirectURL(rc.GetRedirectURL()),
+			configuration.WithOidcIssuerURL(rc.GetOidcIssuerURL()),
+			configuration.EnableSslInsecureSkipVerify(rc.GetSslInsecureSkipVerify()),
+			configuration.EnableInsecureOidcSkipIssuerVerification(rc.GetInsecureOidcSkipIssuerVerification()),
+			configuration.EnableInsecureOidcSkipNonce(rc.GetInsecureOidcSkipNonce()),
 		).Parse()
 	default:
 		oauth2Cfg = configuration.NewOAuth2Config(
-			configuration.WithClientID(extConfig.GetClientID(object)),
-			configuration.WithClientSecret(extConfig.GetClientSecret(object)),
-			configuration.WithScope(extConfig.GetScope(object)),
-			configuration.WithRedirectURL(extConfig.GetRedirectURL(object)),
-			configuration.WithOidcIssuerURL(extConfig.GetOidcIssuerURL(object)),
-			configuration.EnableSslInsecureSkipVerify(extConfig.GetSslInsecureSkipVerify(object)),
-			configuration.EnableInsecureOidcSkipIssuerVerification(extConfig.GetInsecureOidcSkipIssuerVerification(object)),
-			configuration.EnableInsecureOidcSkipNonce(extConfig.GetInsecureOidcSkipNonce(object)),
+			configuration.WithClientID(rc.GetClientID()),
+			configuration.WithClientSecret(rc.GetClientSecret()),
+			configuration.WithScope(rc.GetScope()),
+			configuration.WithRedirectURL(rc.GetRedirectURL()),
+			configuration.WithOidcIssuerURL(rc.GetOidcIssuerURL()),
+			configuration.EnableSslInsecureSkipVerify(rc.GetSslInsecureSkipVerify()),
+			configuration.EnableInsecureOidcSkipIssuerVerification(rc.GetInsecureOidcSkipIssuerVerification()),
+			configuration.EnableInsecureOidcSkipNonce(rc.GetInsecureOidcSkipNonce()),
 		).Parse()
 	}
 
@@ -108,8 +106,8 @@ func kubeconfigSecretObject(object client.Object) *corev1.Secret {
 	}
 }
 
-func mutateKubeconfigSecret(secret *corev1.Secret, object client.Object, cfg *configuration.OIDCAppsControllerConfig) error {
-	kubeConfigStr := cfg.GetKubeConfigStr(object)
+func mutateKubeconfigSecret(secret *corev1.Secret, rc *configuration.ResolvedConfig) error {
+	kubeConfigStr := rc.GetKubeConfigStr()
 
 	decodestr, err := base64.StdEncoding.DecodeString(kubeConfigStr)
 	if err != nil {
@@ -143,8 +141,8 @@ func oidcCaBundleSecretObject(object client.Object) *corev1.Secret {
 	}
 }
 
-func mutateOidcCaBundleSecret(secret *corev1.Secret, object client.Object, cfg *configuration.OIDCAppsControllerConfig) error {
-	oidcCABundle := cfg.GetOidcCABundle(object)
+func mutateOidcCaBundleSecret(secret *corev1.Secret, rc *configuration.ResolvedConfig) error {
+	oidcCABundle := rc.GetOidcCABundle()
 
 	secret.Labels = map[string]string{
 		constants.LabelKey:       constants.LabelValue,
@@ -155,10 +153,10 @@ func mutateOidcCaBundleSecret(secret *corev1.Secret, object client.Object, cfg *
 	return nil
 }
 
-func needsKubeconfigSecret(object client.Object, cfg *configuration.OIDCAppsControllerConfig) bool {
-	return cfg.GetKubeConfigStr(object) != ""
+func needsKubeconfigSecret(rc *configuration.ResolvedConfig) bool {
+	return rc.GetKubeConfigStr() != ""
 }
 
-func needsOidcCaBundleSecret(object client.Object, cfg *configuration.OIDCAppsControllerConfig) bool {
-	return cfg.GetOidcCABundle(object) != ""
+func needsOidcCaBundleSecret(rc *configuration.ResolvedConfig) bool {
+	return rc.GetOidcCABundle() != ""
 }

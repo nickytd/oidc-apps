@@ -3,45 +3,37 @@
 
 package configuration
 
-import (
-	"context"
-
-	"sigs.k8s.io/controller-runtime/pkg/client"
-)
-
 // GetKubeSecretName returns the kubeconfig secret name of the target workload
-func (c *OIDCAppsControllerConfig) GetKubeSecretName(object client.Object) string {
+func (rc *ResolvedConfig) GetKubeSecretName() string {
 	secretName := ""
 
-	t := c.FetchTarget(context.Background(), object)
-	if t.KubeRbacProxy != nil &&
-		t.KubeRbacProxy.KubeSecretRef != nil &&
-		t.KubeRbacProxy.KubeSecretRef.Name != "" {
-		return t.KubeRbacProxy.KubeSecretRef.Name
+	if rc.target.KubeRbacProxy != nil &&
+		rc.target.KubeRbacProxy.KubeSecretRef != nil &&
+		rc.target.KubeRbacProxy.KubeSecretRef.Name != "" {
+		return rc.target.KubeRbacProxy.KubeSecretRef.Name
 	}
 
-	if c.Global.KubeRbacProxy != nil &&
-		c.Global.KubeRbacProxy.KubeSecretRef != nil &&
-		c.Global.KubeRbacProxy.KubeSecretRef.Name != "" {
-		secretName = c.Global.KubeRbacProxy.KubeSecretRef.Name
+	if rc.global.KubeRbacProxy != nil &&
+		rc.global.KubeRbacProxy.KubeSecretRef != nil &&
+		rc.global.KubeRbacProxy.KubeSecretRef.Name != "" {
+		secretName = rc.global.KubeRbacProxy.KubeSecretRef.Name
 	}
 
 	return secretName
 }
 
 // GetKubeConfigStr returns the kubeconfig string of the target workload
-func (c *OIDCAppsControllerConfig) GetKubeConfigStr(object client.Object) string {
+func (rc *ResolvedConfig) GetKubeConfigStr() string {
 	kubeConfig := ""
 
-	t := c.FetchTarget(context.Background(), object)
-	if t.KubeRbacProxy != nil &&
-		t.KubeRbacProxy.KubeConfigStr != "" {
-		return t.KubeRbacProxy.KubeConfigStr
+	if rc.target.KubeRbacProxy != nil &&
+		rc.target.KubeRbacProxy.KubeConfigStr != "" {
+		return rc.target.KubeRbacProxy.KubeConfigStr
 	}
 
-	if c.Global.KubeRbacProxy != nil &&
-		c.Global.KubeRbacProxy.KubeConfigStr != "" {
-		kubeConfig = c.Global.KubeRbacProxy.KubeConfigStr
+	if rc.global.KubeRbacProxy != nil &&
+		rc.global.KubeRbacProxy.KubeConfigStr != "" {
+		kubeConfig = rc.global.KubeRbacProxy.KubeConfigStr
 	}
 
 	return kubeConfig

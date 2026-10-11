@@ -4,26 +4,22 @@
 package configuration
 
 import (
-	"context"
 	"strings"
-
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/nickytd/oidc-apps/pkg/randutils"
 )
 
 // GetHost return the domain name for a given workload target
-func (c *OIDCAppsControllerConfig) GetHost(object client.Object) string {
-	t := c.FetchTarget(context.Background(), object)
-	domain := c.Global.DomainName
+func (rc *ResolvedConfig) GetHost() string {
+	domain := rc.global.DomainName
 
-	prefix := object.GetName() + "-" + object.GetNamespace()
-	if t.Ingress != nil && t.Ingress.HostPrefix != "" {
-		prefix = t.Ingress.HostPrefix + "-" + randutils.GenerateSha256(object.GetName()+"-"+object.GetNamespace())
+	prefix := rc.object.GetName() + "-" + rc.object.GetNamespace()
+	if rc.target.Ingress != nil && rc.target.Ingress.HostPrefix != "" {
+		prefix = rc.target.Ingress.HostPrefix + "-" + randutils.GenerateSha256(rc.object.GetName()+"-"+rc.object.GetNamespace())
 	}
 
-	if t.Ingress != nil && t.Ingress.Host != "" {
-		prefix, domain, _ = strings.Cut(t.Ingress.Host, ".")
+	if rc.target.Ingress != nil && rc.target.Ingress.Host != "" {
+		prefix, domain, _ = strings.Cut(rc.target.Ingress.Host, ".")
 	}
 
 	if domain == "" {
@@ -34,12 +30,11 @@ func (c *OIDCAppsControllerConfig) GetHost(object client.Object) string {
 }
 
 // GetUpstreamTarget returns the protocol and port tuple of the target workload
-func (c *OIDCAppsControllerConfig) GetUpstreamTarget(object client.Object) string {
+func (rc *ResolvedConfig) GetUpstreamTarget() string {
 	b := strings.Builder{}
 	protocol := "http"
 
-	t := c.FetchTarget(context.Background(), object)
-	if t.TargetProtocol == "https" {
+	if rc.target.TargetProtocol == "https" {
 		protocol = "https"
 	}
 
@@ -49,8 +44,8 @@ func (c *OIDCAppsControllerConfig) GetUpstreamTarget(object client.Object) strin
 	_, _ = b.WriteString(protocol)
 	b.Grow(7)
 	_, _ = b.WriteString(", port=")
-	b.Grow(len(t.TargetPort.String()))
-	_, _ = b.WriteString(t.TargetPort.String())
+	b.Grow(len(rc.target.TargetPort.String()))
+	_, _ = b.WriteString(rc.target.TargetPort.String())
 
 	return b.String()
 }

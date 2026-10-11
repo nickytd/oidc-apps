@@ -49,7 +49,7 @@ func TestTargetIngressHostPrefix(t *testing.T) {
 		WithObjects(getDeployment("test-02")).
 		Build()
 
-	z := strings.SplitN(extensionConfig.GetHost(getDeployment("test-02")), ".", 2)
+	z := strings.SplitN(extensionConfig.Resolve(t.Context(), getDeployment("test-02")).GetHost(), ".", 2)
 	g.Expect(len(z)).To(Equal(2))
 	g.Expect(z[0]).To(HavePrefix("test-02-prefix-"))
 	g.Expect(z[1]).To(Equal("domain.org"))
@@ -67,7 +67,7 @@ func TestTargetIngressHost(t *testing.T) {
 		WithObjects(getDeployment("test-03")).
 		Build()
 
-	g.Expect(extensionConfig.GetHost(getDeployment("test-03"))).To(Equal("this.overwrites"))
+	g.Expect(extensionConfig.Resolve(t.Context(), getDeployment("test-03")).GetHost()).To(Equal("this.overwrites"))
 }
 
 func TestTargetWithoutIngressHost(t *testing.T) {
@@ -82,7 +82,7 @@ func TestTargetWithoutIngressHost(t *testing.T) {
 		WithObjects(getDeployment("test-04")).
 		Build()
 
-	g.Expect(extensionConfig.GetHost(getDeployment("test-04"))).To(Equal("test-04-test.domain.org"))
+	g.Expect(extensionConfig.Resolve(t.Context(), getDeployment("test-04")).GetHost()).To(Equal("test-04-test.domain.org"))
 }
 
 func TestTargetGlobalKubeSecret(t *testing.T) {
@@ -97,8 +97,9 @@ func TestTargetGlobalKubeSecret(t *testing.T) {
 		WithObjects(getDeployment("test-03")).
 		Build()
 
-	g.Expect(extensionConfig.GetKubeSecretName(getDeployment("test-03"))).To(Equal("kubeconfig"))
-	g.Expect(extensionConfig.ShallCreateIngress(getDeployment("test-03"))).To(BeFalse())
+	rc := extensionConfig.Resolve(t.Context(), getDeployment("test-03"))
+	g.Expect(rc.GetKubeSecretName()).To(Equal("kubeconfig"))
+	g.Expect(rc.ShallCreateIngress()).To(BeFalse())
 }
 
 func TestTargetKubeSecret(t *testing.T) {
@@ -113,8 +114,9 @@ func TestTargetKubeSecret(t *testing.T) {
 		WithObjects(getDeployment("test-02")).
 		Build()
 
-	g.Expect(extensionConfig.ShallCreateIngress(getDeployment("test-02"))).To(BeTrue())
-	g.Expect(extensionConfig.GetKubeSecretName(getDeployment("test-02"))).To(Equal("target-kubeconfig"))
+	rc := extensionConfig.Resolve(t.Context(), getDeployment("test-02"))
+	g.Expect(rc.ShallCreateIngress()).To(BeTrue())
+	g.Expect(rc.GetKubeSecretName()).To(Equal("target-kubeconfig"))
 }
 
 func TestTargetGlobalConfiguration(t *testing.T) {
@@ -130,17 +132,18 @@ func TestTargetGlobalConfiguration(t *testing.T) {
 		WithObjects(target).
 		Build()
 
-	g.Expect(extensionConfig.GetClientID(target)).To(Equal("client-id"))
-	g.Expect(extensionConfig.GetScope(target)).To(Equal("openid email"))
-	g.Expect(extensionConfig.GetClientSecret(target)).To(Equal("client-secret"))
-	g.Expect(extensionConfig.GetRedirectURL(target)).To(Equal("https://test-04-test.domain.org/oauth2/callback"))
-	g.Expect(extensionConfig.GetOidcIssuerURL(target)).To(Equal("https://oidc-provider.org"))
-	g.Expect(extensionConfig.GetSslInsecureSkipVerify(target)).To(BeFalse())
-	g.Expect(extensionConfig.GetInsecureOidcSkipIssuerVerification(target)).To(BeFalse())
-	g.Expect(extensionConfig.GetInsecureOidcSkipNonce(target)).To(BeFalse())
-	g.Expect(extensionConfig.GetKubeConfigStr(target)).To(Equal("Imt1YmVjb25maWci"))
-	g.Expect(extensionConfig.GetKubeSecretName(target)).To(Equal("kubeconfig"))
-	g.Expect(extensionConfig.ShallCreateIngress(target)).To(BeFalse())
+	rc := extensionConfig.Resolve(t.Context(), target)
+	g.Expect(rc.GetClientID()).To(Equal("client-id"))
+	g.Expect(rc.GetScope()).To(Equal("openid email"))
+	g.Expect(rc.GetClientSecret()).To(Equal("client-secret"))
+	g.Expect(rc.GetRedirectURL()).To(Equal("https://test-04-test.domain.org/oauth2/callback"))
+	g.Expect(rc.GetOidcIssuerURL()).To(Equal("https://oidc-provider.org"))
+	g.Expect(rc.GetSslInsecureSkipVerify()).To(BeFalse())
+	g.Expect(rc.GetInsecureOidcSkipIssuerVerification()).To(BeFalse())
+	g.Expect(rc.GetInsecureOidcSkipNonce()).To(BeFalse())
+	g.Expect(rc.GetKubeConfigStr()).To(Equal("Imt1YmVjb25maWci"))
+	g.Expect(rc.GetKubeSecretName()).To(Equal("kubeconfig"))
+	g.Expect(rc.ShallCreateIngress()).To(BeFalse())
 }
 
 func TestTargetConfiguration(t *testing.T) {
@@ -156,17 +159,18 @@ func TestTargetConfiguration(t *testing.T) {
 		WithObjects(target).
 		Build()
 
-	g.Expect(extensionConfig.GetClientID(target)).To(Equal("client-id-target"))
-	g.Expect(extensionConfig.GetScope(target)).To(Equal("openid email target"))
-	g.Expect(extensionConfig.GetClientSecret(target)).To(Equal("client-secret-target"))
-	g.Expect(extensionConfig.GetRedirectURL(target)).To(Equal("https://app.org/oauth2/callback"))
-	g.Expect(extensionConfig.GetOidcIssuerURL(target)).To(Equal("https://oidc-provider-target.org"))
-	g.Expect(extensionConfig.GetOidcCASecretName(target)).To(Equal("target-oidc-ca"))
-	g.Expect(extensionConfig.GetSslInsecureSkipVerify(target)).To(BeTrue())
-	g.Expect(extensionConfig.GetInsecureOidcSkipIssuerVerification(target)).To(BeTrue())
-	g.Expect(extensionConfig.GetInsecureOidcSkipNonce(target)).To(BeTrue())
-	g.Expect(extensionConfig.GetKubeConfigStr(target)).To(Equal("a3ViZWNvbmZpZy10YXJnZXQK"))
-	g.Expect(extensionConfig.GetKubeSecretName(target)).To(Equal("target-kubeconfig"))
+	rc := extensionConfig.Resolve(t.Context(), target)
+	g.Expect(rc.GetClientID()).To(Equal("client-id-target"))
+	g.Expect(rc.GetScope()).To(Equal("openid email target"))
+	g.Expect(rc.GetClientSecret()).To(Equal("client-secret-target"))
+	g.Expect(rc.GetRedirectURL()).To(Equal("https://app.org/oauth2/callback"))
+	g.Expect(rc.GetOidcIssuerURL()).To(Equal("https://oidc-provider-target.org"))
+	g.Expect(rc.GetOidcCASecretName()).To(Equal("target-oidc-ca"))
+	g.Expect(rc.GetSslInsecureSkipVerify()).To(BeTrue())
+	g.Expect(rc.GetInsecureOidcSkipIssuerVerification()).To(BeTrue())
+	g.Expect(rc.GetInsecureOidcSkipNonce()).To(BeTrue())
+	g.Expect(rc.GetKubeConfigStr()).To(Equal("a3ViZWNvbmZpZy10YXJnZXQK"))
+	g.Expect(rc.GetKubeSecretName()).To(Equal("target-kubeconfig"))
 }
 
 func TestOauth2ProxyOptionsGlobalFallback(t *testing.T) {
@@ -182,12 +186,13 @@ func TestOauth2ProxyOptionsGlobalFallback(t *testing.T) {
 		WithObjects(target).
 		Build()
 
-	g.Expect(extensionConfig.GetApprovalPrompt(target)).To(Equal("force"))
-	g.Expect(extensionConfig.GetCookieRefresh(target)).To(Equal("1800s"))
-	g.Expect(extensionConfig.GetEmailDomain(target)).To(Equal("example.org"))
-	g.Expect(extensionConfig.GetSkipProviderButton(target)).To(BeFalse())
-	g.Expect(extensionConfig.GetCodeChallengeMethod(target)).To(Equal("S256"))
-	g.Expect(extensionConfig.GetExtraArgs(target)).To(Equal([]string{"--silence-ping-logging=true"}))
+	rc := extensionConfig.Resolve(t.Context(), target)
+	g.Expect(rc.GetApprovalPrompt()).To(Equal("force"))
+	g.Expect(rc.GetCookieRefresh()).To(Equal("1800s"))
+	g.Expect(rc.GetEmailDomain()).To(Equal("example.org"))
+	g.Expect(rc.GetSkipProviderButton()).To(BeFalse())
+	g.Expect(rc.GetCodeChallengeMethod()).To(Equal("S256"))
+	g.Expect(rc.GetExtraArgs()).To(Equal([]string{"--silence-ping-logging=true"}))
 }
 
 func TestOauth2ProxyOptionsTargetOverride(t *testing.T) {
@@ -203,12 +208,13 @@ func TestOauth2ProxyOptionsTargetOverride(t *testing.T) {
 		WithObjects(target).
 		Build()
 
-	g.Expect(extensionConfig.GetApprovalPrompt(target)).To(Equal("auto"))
-	g.Expect(extensionConfig.GetCookieRefresh(target)).To(Equal("900s"))
-	g.Expect(extensionConfig.GetEmailDomain(target)).To(Equal("target.org"))
-	g.Expect(extensionConfig.GetSkipProviderButton(target)).To(BeTrue())
-	g.Expect(extensionConfig.GetCodeChallengeMethod(target)).To(Equal("plain"))
-	g.Expect(extensionConfig.GetExtraArgs(target)).To(Equal([]string{"--set-xauthrequest=true", "--set-authorization-header=true"}))
+	rc := extensionConfig.Resolve(t.Context(), target)
+	g.Expect(rc.GetApprovalPrompt()).To(Equal("auto"))
+	g.Expect(rc.GetCookieRefresh()).To(Equal("900s"))
+	g.Expect(rc.GetEmailDomain()).To(Equal("target.org"))
+	g.Expect(rc.GetSkipProviderButton()).To(BeTrue())
+	g.Expect(rc.GetCodeChallengeMethod()).To(Equal("plain"))
+	g.Expect(rc.GetExtraArgs()).To(Equal([]string{"--set-xauthrequest=true", "--set-authorization-header=true"}))
 }
 
 func TestOauth2ProxyOptionsDefaults(t *testing.T) {
@@ -222,12 +228,13 @@ func TestOauth2ProxyOptionsDefaults(t *testing.T) {
 		WithObjects(target).
 		Build()
 
-	g.Expect(extensionConfig.GetApprovalPrompt(target)).To(Equal("auto"))
-	g.Expect(extensionConfig.GetCookieRefresh(target)).To(Equal("3600s"))
-	g.Expect(extensionConfig.GetEmailDomain(target)).To(Equal("*"))
-	g.Expect(extensionConfig.GetSkipProviderButton(target)).To(BeTrue())
-	g.Expect(extensionConfig.GetCodeChallengeMethod(target)).To(Equal("S256"))
-	g.Expect(extensionConfig.GetExtraArgs(target)).To(BeNil())
+	rc := extensionConfig.Resolve(t.Context(), target)
+	g.Expect(rc.GetApprovalPrompt()).To(Equal("auto"))
+	g.Expect(rc.GetCookieRefresh()).To(Equal("3600s"))
+	g.Expect(rc.GetEmailDomain()).To(Equal("*"))
+	g.Expect(rc.GetSkipProviderButton()).To(BeTrue())
+	g.Expect(rc.GetCodeChallengeMethod()).To(Equal("S256"))
+	g.Expect(rc.GetExtraArgs()).To(BeNil())
 }
 
 func TestHTTPRouteConfiguration(t *testing.T) {
@@ -245,15 +252,16 @@ func TestHTTPRouteConfiguration(t *testing.T) {
 		WithObjects(target).
 		Build()
 
-	g.Expect(extensionConfig.ShallCreateHTTPRoute(target)).To(BeTrue())
+	rc := extensionConfig.Resolve(t.Context(), target)
+	g.Expect(rc.ShallCreateHTTPRoute()).To(BeTrue())
 
-	parentRefs := extensionConfig.GetHTTPRouteParentRefs(target)
+	parentRefs := rc.GetHTTPRouteParentRefs()
 	g.Expect(parentRefs).To(HaveLen(1))
 	g.Expect(parentRefs[0].Name).To(Equal("my-gateway"))
 	g.Expect(parentRefs[0].Namespace).To(Equal("gateway-system"))
 	g.Expect(parentRefs[0].SectionName).To(Equal("https"))
 
-	host := extensionConfig.GetHTTPRouteHost(target)
+	host := rc.GetHTTPRouteHost()
 	g.Expect(host).To(HavePrefix("test-05-prefix-"))
 	g.Expect(host).To(HaveSuffix(".domain.org"))
 }
@@ -273,10 +281,11 @@ func TestHTTPRouteWithCustomHost(t *testing.T) {
 		WithObjects(target).
 		Build()
 
-	g.Expect(extensionConfig.ShallCreateHTTPRoute(target)).To(BeTrue())
-	g.Expect(extensionConfig.GetHTTPRouteHost(target)).To(Equal("custom.httproute.host"))
+	rc := extensionConfig.Resolve(t.Context(), target)
+	g.Expect(rc.ShallCreateHTTPRoute()).To(BeTrue())
+	g.Expect(rc.GetHTTPRouteHost()).To(Equal("custom.httproute.host"))
 
-	parentRefs := extensionConfig.GetHTTPRouteParentRefs(target)
+	parentRefs := rc.GetHTTPRouteParentRefs()
 	g.Expect(parentRefs).To(HaveLen(1))
 	g.Expect(parentRefs[0].Name).To(Equal("another-gateway"))
 	g.Expect(parentRefs[0].Namespace).To(Equal(""))
@@ -298,8 +307,9 @@ func TestTargetWithoutHTTPRoute(t *testing.T) {
 		WithObjects(target).
 		Build()
 
-	g.Expect(extensionConfig.ShallCreateHTTPRoute(target)).To(BeFalse())
-	g.Expect(extensionConfig.GetHTTPRouteParentRefs(target)).To(BeNil())
+	rc := extensionConfig.Resolve(t.Context(), target)
+	g.Expect(rc.ShallCreateHTTPRoute()).To(BeFalse())
+	g.Expect(rc.GetHTTPRouteParentRefs()).To(BeNil())
 }
 
 func TestHTTPRouteDisabledGlobally(t *testing.T) {
@@ -317,7 +327,7 @@ func TestHTTPRouteDisabledGlobally(t *testing.T) {
 		Build()
 
 	// Should return false because global.gateway.httpRoutes.enabled is not set (nil)
-	g.Expect(extensionConfig.ShallCreateHTTPRoute(target)).To(BeFalse())
+	g.Expect(extensionConfig.Resolve(t.Context(), target).ShallCreateHTTPRoute()).To(BeFalse())
 	g.Expect(extensionConfig.IsHTTPRouteEnabled()).To(BeFalse())
 }
 
@@ -359,11 +369,12 @@ func TestHTTPRouteWithEmptyParentRefs(t *testing.T) {
 		Build()
 
 	// Should return true for create, but parentRefs should be empty
-	g.Expect(extensionConfig.ShallCreateHTTPRoute(target)).To(BeTrue())
-	g.Expect(extensionConfig.GetHTTPRouteParentRefs(target)).To(BeNil())
+	rc := extensionConfig.Resolve(t.Context(), target)
+	g.Expect(rc.ShallCreateHTTPRoute()).To(BeTrue())
+	g.Expect(rc.GetHTTPRouteParentRefs()).To(BeNil())
 
 	// Verify the host is still generated correctly
-	host := extensionConfig.GetHTTPRouteHost(target)
+	host := rc.GetHTTPRouteHost()
 	g.Expect(host).To(HavePrefix("test-07-prefix-"))
 	g.Expect(host).To(HaveSuffix(".domain.org"))
 }
@@ -409,8 +420,8 @@ func TestGetIngressDefaultPath(t *testing.T) {
 		WithObjects(getDeployment("test-02")).
 		Build()
 
-	g.Expect(extensionConfig.GetIngressDefaultPath(getDeployment("test-08"))).To(Equal("/select/vmui"))
-	g.Expect(extensionConfig.GetIngressDefaultPath(getDeployment("test-02"))).To(BeEmpty())
+	g.Expect(extensionConfig.Resolve(t.Context(), getDeployment("test-08")).GetIngressDefaultPath()).To(Equal("/select/vmui"))
+	g.Expect(extensionConfig.Resolve(t.Context(), getDeployment("test-02")).GetIngressDefaultPath()).To(BeEmpty())
 }
 
 func TestGetHTTPRouteDefaultPath(t *testing.T) {
@@ -427,8 +438,8 @@ func TestGetHTTPRouteDefaultPath(t *testing.T) {
 		WithObjects(getDeployment("test-05")).
 		Build()
 
-	g.Expect(extensionConfig.GetHTTPRouteDefaultPath(getDeployment("test-09"))).To(Equal("/dashboard"))
-	g.Expect(extensionConfig.GetHTTPRouteDefaultPath(getDeployment("test-05"))).To(BeEmpty())
+	g.Expect(extensionConfig.Resolve(t.Context(), getDeployment("test-09")).GetHTTPRouteDefaultPath()).To(Equal("/dashboard"))
+	g.Expect(extensionConfig.Resolve(t.Context(), getDeployment("test-05")).GetHTTPRouteDefaultPath()).To(BeEmpty())
 }
 
 func TestGetUpstreamTarget(t *testing.T) {
@@ -444,10 +455,10 @@ func TestGetUpstreamTarget(t *testing.T) {
 		Build()
 
 	// test-02 has targetProtocol: https and targetPort: 8443
-	g.Expect(extensionConfig.GetUpstreamTarget(getDeployment("test-02"))).To(Equal("protocol=https, port=8443"))
+	g.Expect(extensionConfig.Resolve(t.Context(), getDeployment("test-02")).GetUpstreamTarget()).To(Equal("protocol=https, port=8443"))
 
 	// test-04 has no targetPort/targetProtocol defined — defaults to http and 0
-	g.Expect(extensionConfig.GetUpstreamTarget(getDeployment("test-04"))).To(Equal("protocol=http, port=0"))
+	g.Expect(extensionConfig.Resolve(t.Context(), getDeployment("test-04")).GetUpstreamTarget()).To(Equal("protocol=http, port=0"))
 }
 
 func TestGetOidcCABundle(t *testing.T) {
@@ -463,11 +474,11 @@ func TestGetOidcCABundle(t *testing.T) {
 		Build()
 
 	// test-04 uses global oidcCABundle
-	bundle := extensionConfig.GetOidcCABundle(getDeployment("test-04"))
+	bundle := extensionConfig.Resolve(t.Context(), getDeployment("test-04")).GetOidcCABundle()
 	g.Expect(bundle).To(Equal("-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----\n"))
 
 	// test-12 has target-level oidcCABundle
-	bundle = extensionConfig.GetOidcCABundle(getDeployment("test-12"))
+	bundle = extensionConfig.Resolve(t.Context(), getDeployment("test-12")).GetOidcCABundle()
 	g.Expect(bundle).To(Equal("target-ca-bundle"))
 }
 
@@ -540,7 +551,7 @@ func TestGetHTTPRouteParentRefsManagedGatewayFallback(t *testing.T) {
 		WithObjects(target).
 		Build()
 
-	parentRefs := extensionConfig.GetHTTPRouteParentRefs(target)
+	parentRefs := extensionConfig.Resolve(t.Context(), target).GetHTTPRouteParentRefs()
 	g.Expect(parentRefs).To(HaveLen(1))
 	g.Expect(parentRefs[0].Name).To(Equal("managed-gw"))
 }
@@ -560,10 +571,11 @@ func TestGetHTTPRouteAnnotationsAndLabels(t *testing.T) {
 		WithObjects(target).
 		Build()
 
-	annotations := extensionConfig.GetHTTPRouteAnnotations(target)
+	rc := extensionConfig.Resolve(t.Context(), target)
+	annotations := rc.GetHTTPRouteAnnotations()
 	g.Expect(annotations).To(HaveKeyWithValue("gateway.networking.k8s.io/purpose", "testing"))
 
-	lbls := extensionConfig.GetHTTPRouteLabels(target)
+	lbls := rc.GetHTTPRouteLabels()
 	g.Expect(lbls).To(HaveKeyWithValue("route-type", "managed"))
 
 	// test-05 has no annotations or labels on HTTPRoute
@@ -573,8 +585,9 @@ func TestGetHTTPRouteAnnotationsAndLabels(t *testing.T) {
 		WithObjects(target05).
 		Build()
 
-	g.Expect(extensionConfig.GetHTTPRouteAnnotations(target05)).To(BeNil())
-	g.Expect(extensionConfig.GetHTTPRouteLabels(target05)).To(BeNil())
+	rc05 := extensionConfig.Resolve(t.Context(), target05)
+	g.Expect(rc05.GetHTTPRouteAnnotations()).To(BeNil())
+	g.Expect(rc05.GetHTTPRouteLabels()).To(BeNil())
 }
 
 func TestGetIngressAnnotationsAndLabels(t *testing.T) {
@@ -590,12 +603,13 @@ func TestGetIngressAnnotationsAndLabels(t *testing.T) {
 		WithObjects(target).
 		Build()
 
-	annotations := extensionConfig.GetIngressAnnotations(target)
+	rc := extensionConfig.Resolve(t.Context(), target)
+	annotations := rc.GetIngressAnnotations()
 	g.Expect(annotations).To(HaveLen(2))
 	g.Expect(annotations).To(HaveKeyWithValue("nginx.ingress.kubernetes.io/rewrite-target", "/"))
 	g.Expect(annotations).To(HaveKeyWithValue("cert-manager.io/cluster-issuer", "letsencrypt"))
 
-	lbls := extensionConfig.GetIngressLabels(target)
+	lbls := rc.GetIngressLabels()
 	g.Expect(lbls).To(HaveLen(2))
 	g.Expect(lbls).To(HaveKeyWithValue("app.kubernetes.io/component", "ingress"))
 	g.Expect(lbls).To(HaveKeyWithValue("environment", "production"))
@@ -607,8 +621,9 @@ func TestGetIngressAnnotationsAndLabels(t *testing.T) {
 		WithObjects(target04).
 		Build()
 
-	g.Expect(extensionConfig.GetIngressAnnotations(target04)).To(BeNil())
-	g.Expect(extensionConfig.GetIngressLabels(target04)).To(BeNil())
+	rc04 := extensionConfig.Resolve(t.Context(), target04)
+	g.Expect(rc04.GetIngressAnnotations()).To(BeNil())
+	g.Expect(rc04.GetIngressLabels()).To(BeNil())
 }
 
 func TestGetIngressClassName(t *testing.T) {
@@ -623,8 +638,8 @@ func TestGetIngressClassName(t *testing.T) {
 		WithObjects(getDeployment("test-02")).
 		Build()
 
-	g.Expect(extensionConfig.GetIngressClassName(getDeployment("test-10"))).To(Equal("nginx"))
-	g.Expect(extensionConfig.GetIngressClassName(getDeployment("test-02"))).To(BeEmpty())
+	g.Expect(extensionConfig.Resolve(t.Context(), getDeployment("test-10")).GetIngressClassName()).To(Equal("nginx"))
+	g.Expect(extensionConfig.Resolve(t.Context(), getDeployment("test-02")).GetIngressClassName()).To(BeEmpty())
 }
 
 func TestGetRedirectURLWithHTTPRoute(t *testing.T) {
@@ -644,7 +659,7 @@ func TestGetRedirectURLWithHTTPRoute(t *testing.T) {
 
 	// GetRedirectURL falls through to https://{GetHost}/oauth2/callback
 	// GetHost uses ingress.Host (not httpRoute.Host), so it falls back to default
-	redirectURL := extensionConfig.GetRedirectURL(target)
+	redirectURL := extensionConfig.Resolve(t.Context(), target).GetRedirectURL()
 	g.Expect(redirectURL).To(Equal("https://test-06-test.domain.org/oauth2/callback"))
 }
 

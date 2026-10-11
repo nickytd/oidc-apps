@@ -18,7 +18,6 @@ import (
 	admissionv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	autoscalerv1 "k8s.io/autoscaler/vertical-pod-autoscaler/pkg/apis/autoscaling.k8s.io/v1"
@@ -161,14 +160,6 @@ var _ = BeforeSuite(func() {
 			),
 			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})).
 		Watches(
-			&networkingv1.Ingress{},
-			handler.EnqueueRequestForOwner(
-				mgr.GetScheme(),
-				mgr.GetRESTMapper(),
-				&appsv1.Deployment{},
-			),
-			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})).
-		Watches(
 			&gatewayv1.HTTPRoute{},
 			handler.EnqueueRequestForOwner(
 				mgr.GetScheme(),
@@ -206,10 +197,6 @@ var _ = BeforeSuite(func() {
 		Watches(
 			&corev1.Service{},
 			handler.EnqueueRequestsFromMapFunc(oidcappscontroller.ServiceMapFuncForStatefulset(mgr)),
-			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})).
-		Watches(
-			&networkingv1.Ingress{},
-			handler.EnqueueRequestsFromMapFunc(oidcappscontroller.IngressMapFuncForStatefulset(mgr)),
 			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})).
 		Watches(
 			&gatewayv1.HTTPRoute{},

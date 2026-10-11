@@ -21,11 +21,9 @@ const (
 	defaultNamespace              = "default"
 	target                        = "nginx-target"
 	nonTarget                     = "nginx-non-target"
-	skipIngressTarget             = "nginx-target-skip-ingress"
 	redirectURLTarget             = "nginx-target-with-oauth2-redirect"
 	httpRouteTarget               = "nginx-target-httproute"
 	httpRouteSkipTarget           = "nginx-target-httproute-skip"
-	defaultPathTarget             = "nginx-target-default-path"
 	httpRouteDefaultPathTarget    = "nginx-target-httproute-default-path"
 	managedGatewayHTTPRouteTarget = "nginx-target-httproute-managed-gw"
 	nginxPod                      = "nginx-pod"
@@ -98,36 +96,6 @@ func createTargetDeployments() []*appsv1.Deployment {
 				Template: corev1.PodTemplateSpec{
 					ObjectMeta: metav1.ObjectMeta{
 						Labels: map[string]string{"app": target},
-					},
-					Spec: corev1.PodSpec{
-						Containers: []corev1.Container{
-							{
-								Name:  "nginx",
-								Image: "nginx:latest",
-							},
-						},
-					},
-				},
-			},
-		},
-		{
-			TypeMeta: metav1.TypeMeta{
-				APIVersion: "apps/v1",
-				Kind:       "Deployment",
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      skipIngressTarget,
-				Namespace: defaultNamespace,
-				Labels:    map[string]string{"app": skipIngressTarget},
-			},
-			Spec: appsv1.DeploymentSpec{
-				Selector: &metav1.LabelSelector{
-					MatchLabels: map[string]string{"app": skipIngressTarget},
-				},
-				Replicas: new(int32(1)),
-				Template: corev1.PodTemplateSpec{
-					ObjectMeta: metav1.ObjectMeta{
-						Labels: map[string]string{"app": skipIngressTarget},
 					},
 					Spec: corev1.PodSpec{
 						Containers: []corev1.Container{
@@ -338,39 +306,6 @@ func createTargetStatefulSetWithCustomRedirectURL() *appsv1.StatefulSet {
 	}
 }
 
-func createTargetSkipIngressStatefulSet() *appsv1.StatefulSet {
-	return &appsv1.StatefulSet{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "apps/v1",
-			Kind:       "StatefulSet",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      skipIngressTarget,
-			Namespace: defaultNamespace,
-			Labels:    map[string]string{"app": skipIngressTarget},
-		},
-		Spec: appsv1.StatefulSetSpec{
-			Selector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{"app": skipIngressTarget},
-			},
-			Replicas: new(int32(2)),
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{"app": skipIngressTarget},
-				},
-				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{
-						{
-							Name:  "nginx",
-							Image: "nginx:latest",
-						},
-					},
-				},
-			},
-		},
-	}
-}
-
 func createStatefulSetPod(owner client.Object, index string) *corev1.Pod {
 	return &corev1.Pod{
 		TypeMeta: metav1.TypeMeta{
@@ -382,34 +317,6 @@ func createStatefulSetPod(owner client.Object, index string) *corev1.Pod {
 			Namespace: defaultNamespace,
 			Labels: map[string]string{
 				"app":                                target,
-				"statefulset.kubernetes.io/pod-name": strings.Join([]string{nginxPod, index}, "-"),
-			},
-			OwnerReferences: []metav1.OwnerReference{
-				*metav1.NewControllerRef(owner, appsv1.SchemeGroupVersion.WithKind("StatefulSet")),
-			},
-		},
-		Spec: corev1.PodSpec{
-			Containers: []corev1.Container{
-				{
-					Name:  "nginx",
-					Image: "nginx:latest",
-				},
-			},
-		},
-	}
-}
-
-func createSkipIngressStatefulSetPod(owner client.Object, index string) *corev1.Pod {
-	return &corev1.Pod{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "v1",
-			Kind:       "Pod",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      strings.Join([]string{nginxPod, index}, "-"),
-			Namespace: defaultNamespace,
-			Labels: map[string]string{
-				"app":                                skipIngressTarget,
 				"statefulset.kubernetes.io/pod-name": strings.Join([]string{nginxPod, index}, "-"),
 			},
 			OwnerReferences: []metav1.OwnerReference{
@@ -548,39 +455,6 @@ func createHTTPRouteStatefulSetPod(owner client.Object, index string) *corev1.Po
 				{
 					Name:  "nginx",
 					Image: "nginx:latest",
-				},
-			},
-		},
-	}
-}
-
-func createDefaultPathTargetDeployment() *appsv1.Deployment {
-	return &appsv1.Deployment{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "apps/v1",
-			Kind:       "Deployment",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      defaultPathTarget,
-			Namespace: defaultNamespace,
-			Labels:    map[string]string{"app": defaultPathTarget},
-		},
-		Spec: appsv1.DeploymentSpec{
-			Selector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{"app": defaultPathTarget},
-			},
-			Replicas: new(int32(1)),
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{"app": defaultPathTarget},
-				},
-				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{
-						{
-							Name:  "nginx",
-							Image: "nginx:latest",
-						},
-					},
 				},
 			},
 		},

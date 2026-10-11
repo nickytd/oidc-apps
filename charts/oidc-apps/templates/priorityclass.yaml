@@ -1,4 +1,4 @@
- # SPDX-FileCopyrightText: 2026 nickytd
+# SPDX-FileCopyrightText: 2026 nickytd
 # SPDX-License-Identifier: Apache-2.0
 ---
 {{- if and .Values.priorityClass .Values.priorityClass.create }}

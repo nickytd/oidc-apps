@@ -285,15 +285,6 @@
           "type": "object",
           "description": "Gateway API configuration",
           "properties": {
-            "httpRoutes": {
-              "type": "object",
-              "properties": {
-                "enabled": {
-                  "type": "boolean",
-                  "description": "Enable Gateway API HTTPRoute support"
-                }
-              }
-            },
             "managed": {
               "type": "boolean",
               "description": "When true, the controller creates and manages a Gateway resource"
@@ -548,51 +539,6 @@
           "targetProtocol": {
             "type": ["string", "null"],
             "enum": ["http", "https", null]
-          },
-          "ingress": {
-            "type": ["object", "null"],
-            "properties": {
-              "create": {
-                "type": ["boolean", "null"]
-              },
-              "hostPrefix": {
-                "type": "string"
-              },
-              "host": {
-                "type": ["string", "null"]
-              },
-              "annotations": {
-                "type": "object",
-                "additionalProperties": {
-                  "type": "string"
-                }
-              },
-              "labels": {
-                "type": "object",
-                "additionalProperties": {
-                  "type": "string"
-                }
-              },
-              "tlsSecretRef": {
-                "type": ["object", "null"],
-                "properties": {
-                  "name": {
-                    "type": "string"
-                  },
-                  "namespace": {
-                    "type": "string"
-                  }
-                }
-              },
-              "ingressClassName": {
-                "type": ["string", "null"]
-              },
-              "defaultPath": {
-                "type": ["string", "null"],
-                "description": "Default redirect path. Requests to / are redirected to this path",
-                "pattern": "^/[a-zA-Z0-9/_\\-.~]+$"
-              }
-            }
           },
           "httpRoute": {
             "type": ["object", "null"],

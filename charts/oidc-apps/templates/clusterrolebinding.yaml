@@ -1,6 +1,6 @@
+{{- if and .Values.clusterRole.create .Values.serviceAccount.create }}
 # SPDX-FileCopyrightText: 2026 nickytd
 # SPDX-License-Identifier: Apache-2.0
-{{- if and .Values.clusterRole.create .Values.serviceAccount.create }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

@@ -112,10 +112,14 @@ webhook, chart, tests/docs) per Conventional Commits.
 - **`values.schema.json`**: remove the target `ingress` property (incl.
   `ingressClassName` etc.) and the `httpRoutes.enabled` property; keep
   `httpRoute` and the gateway schema.
-- Bump the chart `version` in `Chart.yaml` (template change, per Helm
-  conventions). Run `helm lint` + `helm template`.
+- **`Chart.yaml` — bump the chart `version` (required).** This change removes
+  `values.yaml` keys (`target.ingress`, `global.gateway.httpRoutes.enabled`) and
+  alters templates, so it is a breaking chart change. Bump `version: 0.3.0` →
+  `0.4.0` (minor, signalling the removed/renamed config surface). `appVersion`
+  tracks the controller image and is bumped separately at release, not here.
+- Run `helm lint` + `helm template charts/oidc-apps` and confirm valid YAML.
 
-### 5. Tests, examples & docs
+### 5. Tests (`pkg/`, `test/e2e/`)
 
 - **`pkg/configuration/config_test.go`**: remove the ingress-specific tests
   (`TestTargetIngressHostPrefix`, `TestTargetIngressHost`,
@@ -140,15 +144,26 @@ webhook, chart, tests/docs) per Conventional Commits.
     `createTargetSkipIngressStatefulSet` / `createSkipIngressStatefulSetPod`;
     repoint any dependents to httproute equivalents.
   - Gateway API CRDs already load from `test/e2e/crds/` — no fixture change.
+
+### 6. Docs & examples (explicit update list)
+
+Every user-facing document that mentions Ingress or the removed flag must be
+updated in this change — not left for later:
+
 - **`example/config.yaml`**: remove the per-target `ingress:` example block.
+  Ensure a working `httpRoute:` example remains so users have a migration
+  reference.
 - **`example/kind-setup/README.md`**: reword "Envoy Gateway (Gateway API) for
   ingress" to avoid implying networking.k8s.io Ingress.
 - **`README.md`**: add a short note that networking.k8s.io Ingress is no longer
-  supported and Gateway API CRDs are required.
-- **CHANGELOG**: entry stating `target.ingress` and
-  `global.gateway.httpRoutes.enabled` are removed; existing `ingress:` blocks
+  supported and Gateway API CRDs are **required**; verify no stale `ingress:`
+  config snippet remains.
+- **CHANGELOG**: no `CHANGELOG` file exists at the repo root today. Create one (or
+  append if release notes live elsewhere) with an entry stating `target.ingress`
+  and `global.gateway.httpRoutes.enabled` are removed; existing `ingress:` blocks
   are silently ignored on upgrade (non-strict decode) and users must migrate to
-  `httpRoute:`.
+  `httpRoute:`. Note the Helm chart `version` bump (0.3.0 → 0.4.0) in the same
+  entry.
 
 ## Constants (`pkg/constants/const.go`)
 

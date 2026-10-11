@@ -9,6 +9,8 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+
+	"github.com/nickytd/oidc-apps/pkg/configuration"
 )
 
 func isAnOwnedResource(owner, owned client.Object) bool {
@@ -25,7 +27,7 @@ func isAnOwnedResource(owner, owned client.Object) bool {
 	return false
 }
 
-func deleteOwnedResources(ctx context.Context, c client.Client, object client.Object) error {
+func deleteOwnedResources(ctx context.Context, c client.Client, cfg *configuration.OIDCAppsControllerConfig, object client.Object) error {
 	var err error
 
 	_log := log.FromContext(ctx).WithValues("uid", object.GetUID())
@@ -56,7 +58,7 @@ func deleteOwnedResources(ctx context.Context, c client.Client, object client.Ob
 		_log.V(9).Info("Deleted", "name", s.Name, "namespace", s.Namespace)
 	}
 
-	httpRoutes, err := fetchOidcAppsHTTPRoutes(ctx, c, object)
+	httpRoutes, err := fetchOidcAppsHTTPRoutes(ctx, c, cfg, object)
 	if err != nil {
 		return err
 	}

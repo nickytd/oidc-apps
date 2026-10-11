@@ -4,6 +4,7 @@
 package configuration
 
 import (
+	"context"
 	"regexp"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -11,7 +12,7 @@ import (
 
 // ShallCreateIngress returns true if the target workload shall create an ingress
 func (c *OIDCAppsControllerConfig) ShallCreateIngress(object client.Object) bool {
-	t := c.FetchTarget(object)
+	t := c.FetchTarget(context.Background(), object)
 	if t.Ingress != nil {
 		return t.Ingress.Create
 	}
@@ -21,7 +22,7 @@ func (c *OIDCAppsControllerConfig) ShallCreateIngress(object client.Object) bool
 
 // GetIngressTLSSecretName return the tls secret for the ingress serving certificate for the given workload
 func (c *OIDCAppsControllerConfig) GetIngressTLSSecretName(object client.Object) string {
-	t := c.FetchTarget(object)
+	t := c.FetchTarget(context.Background(), object)
 	if t.Ingress != nil && t.Ingress.TLSSecretRef.Name != "" {
 		return t.Ingress.TLSSecretRef.Name
 	}
@@ -31,7 +32,7 @@ func (c *OIDCAppsControllerConfig) GetIngressTLSSecretName(object client.Object)
 
 // GetIngressClassName return the ingress class name for the given target
 func (c *OIDCAppsControllerConfig) GetIngressClassName(object client.Object) string {
-	t := c.FetchTarget(object)
+	t := c.FetchTarget(context.Background(), object)
 	if t.Ingress != nil {
 		return t.Ingress.IngressClassName
 	}
@@ -41,7 +42,7 @@ func (c *OIDCAppsControllerConfig) GetIngressClassName(object client.Object) str
 
 // GetIngressAnnotations returns the ingress annotations for the given target
 func (c *OIDCAppsControllerConfig) GetIngressAnnotations(object client.Object) map[string]string {
-	t := c.FetchTarget(object)
+	t := c.FetchTarget(context.Background(), object)
 	if t.Ingress != nil && t.Ingress.Annotations != nil {
 		return t.Ingress.Annotations
 	}
@@ -51,7 +52,7 @@ func (c *OIDCAppsControllerConfig) GetIngressAnnotations(object client.Object) m
 
 // GetIngressLabels returns the ingress labels for the given target
 func (c *OIDCAppsControllerConfig) GetIngressLabels(object client.Object) map[string]string {
-	t := c.FetchTarget(object)
+	t := c.FetchTarget(context.Background(), object)
 	if t.Ingress != nil && t.Ingress.Labels != nil {
 		return t.Ingress.Labels
 	}
@@ -62,7 +63,7 @@ func (c *OIDCAppsControllerConfig) GetIngressLabels(object client.Object) map[st
 // GetIngressDefaultPath returns the default redirect path for the ingress of the given target.
 // The path must start with "/" to be valid; invalid paths are ignored.
 func (c *OIDCAppsControllerConfig) GetIngressDefaultPath(object client.Object) string {
-	t := c.FetchTarget(object)
+	t := c.FetchTarget(context.Background(), object)
 	if t.Ingress != nil && isValidDefaultPath(t.Ingress.DefaultPath) {
 		return t.Ingress.DefaultPath
 	}

@@ -49,7 +49,7 @@ var _ = BeforeEach(func() {
 		WithObjects(nonTargetDeployment, nonTargetReplicaSet, nonTargetPod).
 		Build()
 
-	configuration.CreateControllerConfigOrDie(
+	extCfg := configuration.CreateControllerConfigOrDie(
 		filepath.Join(tmpDir, "config.yaml"),
 		configuration.WithClient(fakeClient),
 		configuration.WithLog(_log),
@@ -58,6 +58,7 @@ var _ = BeforeEach(func() {
 	podWebhook = &webhook.PodMutator{
 		Client:  fakeClient,
 		Decoder: admission.NewDecoder(s),
+		Config:  extCfg,
 	}
 })
 

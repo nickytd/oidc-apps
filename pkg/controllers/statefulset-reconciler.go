@@ -17,6 +17,7 @@ import (
 // StatefulSetReconciler holds configuration for the reconciler
 type StatefulSetReconciler struct {
 	Client client.Client
+	Config *configuration.OIDCAppsControllerConfig
 }
 
 // Reconcile creates the auth & zutz secrets mounted to the target statefulset
@@ -37,13 +38,13 @@ func (s *StatefulSetReconciler) Reconcile(ctx context.Context, request reconcile
 
 	_log.V(9).Info("handling statefulset reconcile request")
 
-	if !configuration.GetOIDCAppsControllerConfig().Match(reconciledStatefulSet) {
+	if !s.Config.Match(ctx, reconciledStatefulSet) {
 		_log.V(9).Info("Reconciled statefulset is no longer an oidc-application-controller target, pruning owned resources ...")
 
 		// The statefulset still exists but no longer matches the targeting
 		// configuration, so owner-reference garbage collection will not fire.
 		// Prune the previously created owned resources explicitly.
-		if err := deleteOwnedResources(ctx, s.Client, reconciledStatefulSet); err != nil {
+		if err := deleteOwnedResources(ctx, s.Client, s.Config, reconciledStatefulSet); err != nil {
 			return reconcile.Result{}, err
 		}
 
@@ -57,7 +58,7 @@ func (s *StatefulSetReconciler) Reconcile(ctx context.Context, request reconcile
 	// On deletion the owned resources carry owner references to this statefulset
 	// (and its pods), so Kubernetes garbage collection removes them automatically.
 	// The dependency reconcile below is a no-op once the deletion timestamp is set.
-	if err := reconcileStatefulSetDependencies(ctx, s.Client, reconciledStatefulSet); err != nil {
+	if err := reconcileStatefulSetDependencies(ctx, s.Client, s.Config, reconciledStatefulSet); err != nil {
 		return reconcile.Result{}, err
 	}
 

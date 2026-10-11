@@ -19,6 +19,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
+	"github.com/nickytd/oidc-apps/pkg/configuration"
 	"github.com/nickytd/oidc-apps/pkg/constants"
 )
 
@@ -93,7 +94,7 @@ func TestDeleteOwnedResources(t *testing.T) {
 		myService := ownedService("my-svc", "owner-uid")
 		c := newOwnedResourceClient(t, owner, mine, theirs, myService)
 
-		require.NoError(t, deleteOwnedResources(context.Background(), c, owner))
+		require.NoError(t, deleteOwnedResources(context.Background(), c, &configuration.OIDCAppsControllerConfig{}, owner))
 
 		// The resource owned by this deployment must be gone.
 		err := c.Get(context.Background(),
@@ -114,7 +115,7 @@ func TestDeleteOwnedResources(t *testing.T) {
 		owner := ownerDeployment("owner-uid")
 		c := newOwnedResourceClient(t, owner)
 
-		require.NoError(t, deleteOwnedResources(context.Background(), c, owner),
+		require.NoError(t, deleteOwnedResources(context.Background(), c, &configuration.OIDCAppsControllerConfig{}, owner),
 			"pruning with no owned resources must not error")
 	})
 }

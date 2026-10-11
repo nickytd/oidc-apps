@@ -37,29 +37,29 @@ func getImage(envVar, defaultImage string) string {
 	return defaultImage
 }
 
-func addAnnotations(target client.Object) {
+func addAnnotations(target client.Object, cfg *configuration.OIDCAppsControllerConfig) {
 	annotations := target.GetAnnotations()
 	if len(annotations) == 0 {
 		annotations = make(map[string]string, 5)
 	}
 
 	annotations[constants.AnnotationKey] = target.GetName()
-	annotations[constants.AnnotationHostKey] = resolveHost(target)
-	annotations[constants.AnnotationTargetKey] = configuration.GetOIDCAppsControllerConfig().GetUpstreamTarget(target)
+	annotations[constants.AnnotationHostKey] = resolveHost(target, cfg)
+	annotations[constants.AnnotationTargetKey] = cfg.GetUpstreamTarget(target)
 	annotations[constants.AnnotationSuffixKey] = fetchTargetSuffix(target)
-	annotations[constants.AnnotationOauth2SecretChecksumKey] = get2ProxySecretChecksum(target)
+	annotations[constants.AnnotationOauth2SecretChecksumKey] = get2ProxySecretChecksum(target, cfg)
 
 	target.SetAnnotations(annotations)
 }
 
-func get2ProxySecretChecksum(target client.Object) string {
-	var cfg string
+func get2ProxySecretChecksum(target client.Object, cfg *configuration.OIDCAppsControllerConfig) string {
+	var cfgStr string
 
-	extConfig := configuration.GetOIDCAppsControllerConfig()
+	extConfig := cfg
 
 	switch extConfig.GetClientSecret(target) {
 	case "":
-		cfg = configuration.NewOAuth2Config(
+		cfgStr = configuration.NewOAuth2Config(
 			configuration.WithClientID(extConfig.GetClientID(target)),
 			configuration.WithClientSecretFile("/dev/null"),
 			configuration.WithScope(extConfig.GetScope(target)),
@@ -70,7 +70,7 @@ func get2ProxySecretChecksum(target client.Object) string {
 			configuration.EnableInsecureOidcSkipNonce(extConfig.GetInsecureOidcSkipNonce(target)),
 		).Parse()
 	default:
-		cfg = configuration.NewOAuth2Config(
+		cfgStr = configuration.NewOAuth2Config(
 			configuration.WithClientID(extConfig.GetClientID(target)),
 			configuration.WithClientSecret(extConfig.GetClientSecret(target)),
 			configuration.WithScope(extConfig.GetScope(target)),
@@ -82,7 +82,7 @@ func get2ProxySecretChecksum(target client.Object) string {
 		).Parse()
 	}
 
-	return randutils.GenerateFullSha256(cfg)
+	return randutils.GenerateFullSha256(cfgStr)
 }
 
 func addPodLabels(pod *corev1.Pod, lbls map[string]string) {
@@ -228,25 +228,25 @@ func addProxyContainer(name string, podSpec *corev1.PodSpec, container corev1.Co
 	podSpec.Containers = append(podSpec.Containers, container)
 }
 
-func fetchKubconfigSecretName(suffix string, target client.Object) string {
-	if configuration.GetOIDCAppsControllerConfig().GetKubeConfigStr(target) != "" {
+func fetchKubconfigSecretName(suffix string, target client.Object, cfg *configuration.OIDCAppsControllerConfig) string {
+	if cfg.GetKubeConfigStr(target) != "" {
 		return "kubeconfig-" + suffix
 	}
 
-	if configuration.GetOIDCAppsControllerConfig().GetKubeSecretName(target) != "" {
-		return configuration.GetOIDCAppsControllerConfig().GetKubeSecretName(target)
+	if cfg.GetKubeSecretName(target) != "" {
+		return cfg.GetKubeSecretName(target)
 	}
 
 	// In case of kubeConfigStr, the name of the secret is as below
 	return constants.SecretNameKubeconfig + "-" + suffix
 }
 
-func fetchOidcCASecretName(suffix string, target client.Object) string {
-	if configuration.GetOIDCAppsControllerConfig().GetOidcCABundle(target) != "" {
+func fetchOidcCASecretName(suffix string, target client.Object, cfg *configuration.OIDCAppsControllerConfig) string {
+	if cfg.GetOidcCABundle(target) != "" {
 		return constants.SecretNameOidcCa + "-" + suffix
 	}
 
-	return configuration.GetOIDCAppsControllerConfig().GetOidcCASecretName(target)
+	return cfg.GetOidcCASecretName(target)
 }
 
 func fetchTargetSuffix(target client.Object) string {
@@ -297,7 +297,7 @@ func buildUpstreamURL(target string, podSpec corev1.PodSpec) string {
 	return ""
 }
 
-func getKubeRbacProxyContainer(clientID, issuerURL, upstream string, pod *corev1.Pod, owner client.Object) corev1.Container {
+func getKubeRbacProxyContainer(clientID, issuerURL, upstream string, pod *corev1.Pod, owner client.Object, cfg *configuration.OIDCAppsControllerConfig) corev1.Container {
 	image := getImage("KUBE_RBAC_PROXY_IMAGE", defaultKubeRbacProxyImage)
 
 	if pod == nil {
@@ -370,13 +370,13 @@ func getKubeRbacProxyContainer(clientID, issuerURL, upstream string, pod *corev1
 		VolumeMounts: volumeMounts,
 	}
 
-	if shallAddKubeConfigSecretName(owner) {
+	if shallAddKubeConfigSecretName(owner, cfg) {
 		// Add volume mount and start parameter if the secret name is provided
 		container.Args = append(container.Args, "--kubeconfig=/etc/kube-rbac-proxy/kubeconfig")
 	}
 
 	// TODO: There is a bug https://github.com/brancz/kube-rbac-proxy/issues/259
-	if shallAddOidcCaSecretName(owner) {
+	if shallAddOidcCaSecretName(owner, cfg) {
 		// Add volume mount and start parameter if the secret name is provided
 		container.Args = append(container.Args, "--oidc-ca-file=/etc/kube-rbac-proxy/ca.crt")
 	}
@@ -384,7 +384,7 @@ func getKubeRbacProxyContainer(clientID, issuerURL, upstream string, pod *corev1
 	return container
 }
 
-func getOIDCProxyContainer(_log logr.Logger, pod *corev1.PodSpec, owner client.Object) corev1.Container {
+func getOIDCProxyContainer(_log logr.Logger, pod *corev1.PodSpec, owner client.Object, cfg *configuration.OIDCAppsControllerConfig) corev1.Container {
 	image := getImage("OAUTH2_PROXY_IMAGE", defaultOAuth2ProxyImage)
 
 	if pod == nil {
@@ -425,7 +425,7 @@ func getOIDCProxyContainer(_log logr.Logger, pod *corev1.PodSpec, owner client.O
 	fullHash := randutils.GenerateFullSha256(owner.GetName() + "-" + owner.GetNamespace() + "-" + string(owner.GetUID()) + "-cookie-secret")
 	cookieSecret := fullHash[:32]
 
-	extConfig := configuration.GetOIDCAppsControllerConfig()
+	extConfig := cfg
 
 	container := corev1.Container{
 		Name:            constants.ContainerNameOauth2Proxy,
@@ -456,7 +456,7 @@ func getOIDCProxyContainer(_log logr.Logger, pod *corev1.PodSpec, owner client.O
 		VolumeMounts: volumeMounts,
 	}
 
-	if shallAddOidcCaSecretName(owner) {
+	if shallAddOidcCaSecretName(owner, cfg) {
 		// Add volume mount and start parameter if the secret name is provided
 		container.Args = append(container.Args, "--provider-ca-file=/etc/oauth2-proxy/ca.crt")
 	}
@@ -478,24 +478,23 @@ func getOIDCProxyContainer(_log logr.Logger, pod *corev1.PodSpec, owner client.O
 	return container
 }
 
-func shallAddKubeConfigSecretName(target client.Object) bool {
-	if configuration.GetOIDCAppsControllerConfig().GetKubeConfigStr(target) != "" {
+func shallAddKubeConfigSecretName(target client.Object, cfg *configuration.OIDCAppsControllerConfig) bool {
+	if cfg.GetKubeConfigStr(target) != "" {
 		return true
 	}
 
-	return configuration.GetOIDCAppsControllerConfig().GetKubeSecretName(target) != ""
+	return cfg.GetKubeSecretName(target) != ""
 }
 
-func shallAddOidcCaSecretName(target client.Object) bool {
-	if configuration.GetOIDCAppsControllerConfig().GetOidcCABundle(target) != "" {
+func shallAddOidcCaSecretName(target client.Object, cfg *configuration.OIDCAppsControllerConfig) bool {
+	if cfg.GetOidcCABundle(target) != "" {
 		return true
 	}
 
-	return configuration.GetOIDCAppsControllerConfig().GetOidcCASecretName(target) != ""
+	return cfg.GetOidcCASecretName(target) != ""
 }
 
-func resolveHost(target client.Object) string {
-	cfg := configuration.GetOIDCAppsControllerConfig()
+func resolveHost(target client.Object, cfg *configuration.OIDCAppsControllerConfig) string {
 	if cfg.IsHTTPRouteEnabled() {
 		return cfg.GetHTTPRouteHost(target)
 	}

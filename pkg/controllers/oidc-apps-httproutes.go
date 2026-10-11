@@ -29,9 +29,9 @@ func httpRouteForDeploymentObject(object client.Object) *gatewayv1.HTTPRoute {
 	}
 }
 
-func mutateHTTPRouteForDeployment(httpRoute *gatewayv1.HTTPRoute, object client.Object) error {
+func mutateHTTPRouteForDeployment(httpRoute *gatewayv1.HTTPRoute, object client.Object, cfg *configuration.OIDCAppsControllerConfig) error {
 	suffix := randutils.GenerateSha256(object.GetName() + "-" + object.GetNamespace())
-	extConfig := configuration.GetOIDCAppsControllerConfig()
+	extConfig := cfg
 	host := extConfig.GetHTTPRouteHost(object)
 	parentRefs := extConfig.GetHTTPRouteParentRefs(object)
 
@@ -71,7 +71,7 @@ func mutateHTTPRouteForDeployment(httpRoute *gatewayv1.HTTPRoute, object client.
 		httpRoute.Annotations = annotations
 	}
 
-	applyHTTPRouteDefaultPathRedirect(httpRoute, object)
+	applyHTTPRouteDefaultPathRedirect(httpRoute, object, cfg)
 
 	extraLabels := extConfig.GetHTTPRouteLabels(object)
 	maps.Copy(httpRoute.Labels, extraLabels)
@@ -91,9 +91,9 @@ func httpRouteForStatefulSetPodObject(pod *corev1.Pod, object client.Object) *ga
 	}
 }
 
-func mutateHTTPRouteForStatefulSetPod(httpRoute *gatewayv1.HTTPRoute, pod *corev1.Pod, object client.Object) error {
+func mutateHTTPRouteForStatefulSetPod(httpRoute *gatewayv1.HTTPRoute, pod *corev1.Pod, object client.Object, cfg *configuration.OIDCAppsControllerConfig) error {
 	suffix := randutils.GenerateSha256(pod.GetName() + "-" + pod.GetNamespace())
-	extConfig := configuration.GetOIDCAppsControllerConfig()
+	extConfig := cfg
 	parentRefs := extConfig.GetHTTPRouteParentRefs(object)
 	index := fetchStrIndexIfPresent(pod)
 
@@ -141,7 +141,7 @@ func mutateHTTPRouteForStatefulSetPod(httpRoute *gatewayv1.HTTPRoute, pod *corev
 		httpRoute.Annotations = annotations
 	}
 
-	applyHTTPRouteDefaultPathRedirect(httpRoute, object)
+	applyHTTPRouteDefaultPathRedirect(httpRoute, object, cfg)
 
 	extraLabels := extConfig.GetHTTPRouteLabels(object)
 	maps.Copy(httpRoute.Labels, extraLabels)
@@ -149,8 +149,8 @@ func mutateHTTPRouteForStatefulSetPod(httpRoute *gatewayv1.HTTPRoute, pod *corev
 	return nil
 }
 
-func applyHTTPRouteDefaultPathRedirect(httpRoute *gatewayv1.HTTPRoute, object client.Object) {
-	defaultPath := configuration.GetOIDCAppsControllerConfig().GetHTTPRouteDefaultPath(object)
+func applyHTTPRouteDefaultPathRedirect(httpRoute *gatewayv1.HTTPRoute, object client.Object, cfg *configuration.OIDCAppsControllerConfig) {
+	defaultPath := cfg.GetHTTPRouteDefaultPath(object)
 	if defaultPath == "" {
 		return
 	}

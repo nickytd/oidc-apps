@@ -33,8 +33,8 @@ func TestTargetMatchLabels(t *testing.T) {
 		WithObjects(getNginxDeployment()).
 		Build()
 
-	g.Expect(extensionConfig.Match(target)).To(BeTrue())
-	g.Expect(extensionConfig.Match(getNginxDeployment())).To(BeFalse())
+	g.Expect(extensionConfig.Match(t.Context(), target)).To(BeTrue())
+	g.Expect(extensionConfig.Match(t.Context(), getNginxDeployment())).To(BeFalse())
 }
 
 func TestTargetIngressHostPrefix(t *testing.T) {

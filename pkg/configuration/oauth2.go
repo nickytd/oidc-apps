@@ -4,6 +4,7 @@
 package configuration
 
 import (
+	"context"
 	"encoding/base64"
 
 	"k8s.io/utils/ptr"
@@ -14,7 +15,7 @@ import (
 func (c *OIDCAppsControllerConfig) GetOidcCASecretName(object client.Object) string {
 	secretName := ""
 
-	t := c.FetchTarget(object)
+	t := c.FetchTarget(context.Background(), object)
 	if t.OidcCASecretRef != nil &&
 		t.OidcCASecretRef.Name != "" {
 		return t.OidcCASecretRef.Name
@@ -36,7 +37,7 @@ func (c *OIDCAppsControllerConfig) GetOidcCABundle(object client.Object) string 
 		oidcCABundle string
 	)
 
-	t := c.FetchTarget(object)
+	t := c.FetchTarget(context.Background(), object)
 	if t.OidcCABundle != "" {
 		if decodedBytes, err = base64.StdEncoding.DecodeString(t.OidcCABundle); err != nil {
 			c.log.Error(err, "failed to decode oidc ca bundle")
@@ -62,7 +63,7 @@ func (c *OIDCAppsControllerConfig) GetOidcCABundle(object client.Object) string 
 
 // GetClientID returns the OIDC Provider client_id for the given workload target
 func (c *OIDCAppsControllerConfig) GetClientID(object client.Object) string {
-	t := c.FetchTarget(object)
+	t := c.FetchTarget(context.Background(), object)
 
 	if t.Oauth2Proxy != nil &&
 		t.Oauth2Proxy.ClientID != "" {
@@ -79,7 +80,7 @@ func (c *OIDCAppsControllerConfig) GetClientID(object client.Object) string {
 
 // GetClientSecret returns the OIDC Provider secret for the given target workload
 func (c *OIDCAppsControllerConfig) GetClientSecret(object client.Object) string {
-	t := c.FetchTarget(object)
+	t := c.FetchTarget(context.Background(), object)
 	if t.Oauth2Proxy != nil &&
 		t.Oauth2Proxy.ClientSecret != "" {
 		return t.Oauth2Proxy.ClientSecret
@@ -95,7 +96,7 @@ func (c *OIDCAppsControllerConfig) GetClientSecret(object client.Object) string 
 
 // GetScope returns the OIDC Provider scope for the given target workload
 func (c *OIDCAppsControllerConfig) GetScope(object client.Object) string {
-	t := c.FetchTarget(object)
+	t := c.FetchTarget(context.Background(), object)
 	if t.Oauth2Proxy != nil &&
 		t.Oauth2Proxy.Scope != "" {
 		return t.Oauth2Proxy.Scope
@@ -111,7 +112,7 @@ func (c *OIDCAppsControllerConfig) GetScope(object client.Object) string {
 
 // GetRedirectURL returns the OIDC Provider redirect URL for the given workload target
 func (c *OIDCAppsControllerConfig) GetRedirectURL(object client.Object) string {
-	t := c.FetchTarget(object)
+	t := c.FetchTarget(context.Background(), object)
 	if t.Oauth2Proxy != nil &&
 		t.Oauth2Proxy.RedirectURL != "" {
 		return t.Oauth2Proxy.RedirectURL
@@ -126,7 +127,7 @@ func (c *OIDCAppsControllerConfig) GetRedirectURL(object client.Object) string {
 
 // GetOidcIssuerURL returns the OIDC Provider URL for the given workload target
 func (c *OIDCAppsControllerConfig) GetOidcIssuerURL(object client.Object) string {
-	t := c.FetchTarget(object)
+	t := c.FetchTarget(context.Background(), object)
 	if t.Oauth2Proxy != nil &&
 		t.Oauth2Proxy.OidcIssuerURL != "" {
 		return t.Oauth2Proxy.OidcIssuerURL
@@ -142,7 +143,7 @@ func (c *OIDCAppsControllerConfig) GetOidcIssuerURL(object client.Object) string
 
 // GetSslInsecureSkipVerify designates if oauth2-proxy shall skip upstream ssl validation
 func (c *OIDCAppsControllerConfig) GetSslInsecureSkipVerify(object client.Object) bool {
-	t := c.FetchTarget(object)
+	t := c.FetchTarget(context.Background(), object)
 	if t.Oauth2Proxy != nil &&
 		t.Oauth2Proxy.SSLInsecureSkipVerify != nil {
 		return ptr.Deref(t.Oauth2Proxy.SSLInsecureSkipVerify, false)
@@ -158,7 +159,7 @@ func (c *OIDCAppsControllerConfig) GetSslInsecureSkipVerify(object client.Object
 
 // GetInsecureOidcSkipIssuerVerification designates if oauth2-proxy shall skip OIDC Provider certificate validation
 func (c *OIDCAppsControllerConfig) GetInsecureOidcSkipIssuerVerification(object client.Object) bool {
-	t := c.FetchTarget(object)
+	t := c.FetchTarget(context.Background(), object)
 	if t.Oauth2Proxy != nil &&
 		t.Oauth2Proxy.InsecureOidcSkipIssuerVerification != nil {
 		return ptr.Deref(t.Oauth2Proxy.InsecureOidcSkipIssuerVerification, false)
@@ -174,7 +175,7 @@ func (c *OIDCAppsControllerConfig) GetInsecureOidcSkipIssuerVerification(object 
 
 // GetInsecureOidcSkipNonce designates if oauth2-proxy shall skip OIDC nonce request parameter
 func (c *OIDCAppsControllerConfig) GetInsecureOidcSkipNonce(object client.Object) bool {
-	t := c.FetchTarget(object)
+	t := c.FetchTarget(context.Background(), object)
 	if t.Oauth2Proxy != nil &&
 		t.Oauth2Proxy.InsecureOidcSkipNonce != nil {
 		return ptr.Deref(t.Oauth2Proxy.InsecureOidcSkipNonce, false)
@@ -190,7 +191,7 @@ func (c *OIDCAppsControllerConfig) GetInsecureOidcSkipNonce(object client.Object
 
 // GetApprovalPrompt returns the OIDC approval prompt mode for the given workload target
 func (c *OIDCAppsControllerConfig) GetApprovalPrompt(object client.Object) string {
-	t := c.FetchTarget(object)
+	t := c.FetchTarget(context.Background(), object)
 	if t.Oauth2Proxy != nil &&
 		t.Oauth2Proxy.ApprovalPrompt != "" {
 		return t.Oauth2Proxy.ApprovalPrompt
@@ -206,7 +207,7 @@ func (c *OIDCAppsControllerConfig) GetApprovalPrompt(object client.Object) strin
 
 // GetCookieRefresh returns the oauth2-proxy cookie refresh interval for the given workload target
 func (c *OIDCAppsControllerConfig) GetCookieRefresh(object client.Object) string {
-	t := c.FetchTarget(object)
+	t := c.FetchTarget(context.Background(), object)
 	if t.Oauth2Proxy != nil &&
 		t.Oauth2Proxy.CookieRefresh != "" {
 		return t.Oauth2Proxy.CookieRefresh
@@ -222,7 +223,7 @@ func (c *OIDCAppsControllerConfig) GetCookieRefresh(object client.Object) string
 
 // GetEmailDomain returns the email domain restriction for the given workload target
 func (c *OIDCAppsControllerConfig) GetEmailDomain(object client.Object) string {
-	t := c.FetchTarget(object)
+	t := c.FetchTarget(context.Background(), object)
 	if t.Oauth2Proxy != nil &&
 		t.Oauth2Proxy.EmailDomain != "" {
 		return t.Oauth2Proxy.EmailDomain
@@ -238,7 +239,7 @@ func (c *OIDCAppsControllerConfig) GetEmailDomain(object client.Object) string {
 
 // GetSkipProviderButton returns whether to skip the oauth2-proxy provider selection button
 func (c *OIDCAppsControllerConfig) GetSkipProviderButton(object client.Object) bool {
-	t := c.FetchTarget(object)
+	t := c.FetchTarget(context.Background(), object)
 	if t.Oauth2Proxy != nil &&
 		t.Oauth2Proxy.SkipProviderButton != nil {
 		return ptr.Deref(t.Oauth2Proxy.SkipProviderButton, true)
@@ -254,7 +255,7 @@ func (c *OIDCAppsControllerConfig) GetSkipProviderButton(object client.Object) b
 
 // GetCodeChallengeMethod returns the PKCE code challenge method for the given workload target
 func (c *OIDCAppsControllerConfig) GetCodeChallengeMethod(object client.Object) string {
-	t := c.FetchTarget(object)
+	t := c.FetchTarget(context.Background(), object)
 	if t.Oauth2Proxy != nil &&
 		t.Oauth2Proxy.CodeChallengeMethod != "" {
 		return t.Oauth2Proxy.CodeChallengeMethod
@@ -270,7 +271,7 @@ func (c *OIDCAppsControllerConfig) GetCodeChallengeMethod(object client.Object) 
 
 // GetExtraArgs returns extra CLI arguments for oauth2-proxy for the given workload target
 func (c *OIDCAppsControllerConfig) GetExtraArgs(object client.Object) []string {
-	t := c.FetchTarget(object)
+	t := c.FetchTarget(context.Background(), object)
 	if t.Oauth2Proxy != nil &&
 		len(t.Oauth2Proxy.ExtraArgs) > 0 {
 		return t.Oauth2Proxy.ExtraArgs

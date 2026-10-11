@@ -29,14 +29,14 @@ func oauth2SecretObject(object client.Object) *corev1.Secret {
 	}
 }
 
-func mutateOauth2Secret(secret *corev1.Secret, object client.Object) error {
-	extConfig := configuration.GetOIDCAppsControllerConfig()
+func mutateOauth2Secret(secret *corev1.Secret, object client.Object, cfg *configuration.OIDCAppsControllerConfig) error {
+	extConfig := cfg
 
-	var cfg string
+	var oauth2Cfg string
 
 	switch extConfig.GetClientSecret(object) {
 	case "":
-		cfg = configuration.NewOAuth2Config(
+		oauth2Cfg = configuration.NewOAuth2Config(
 			configuration.WithClientID(extConfig.GetClientID(object)),
 			configuration.WithClientSecretFile("/dev/null"),
 			configuration.WithScope(extConfig.GetScope(object)),
@@ -47,7 +47,7 @@ func mutateOauth2Secret(secret *corev1.Secret, object client.Object) error {
 			configuration.EnableInsecureOidcSkipNonce(extConfig.GetInsecureOidcSkipNonce(object)),
 		).Parse()
 	default:
-		cfg = configuration.NewOAuth2Config(
+		oauth2Cfg = configuration.NewOAuth2Config(
 			configuration.WithClientID(extConfig.GetClientID(object)),
 			configuration.WithClientSecret(extConfig.GetClientSecret(object)),
 			configuration.WithScope(extConfig.GetScope(object)),
@@ -59,14 +59,14 @@ func mutateOauth2Secret(secret *corev1.Secret, object client.Object) error {
 		).Parse()
 	}
 
-	checksum := randutils.GenerateFullSha256(cfg)
+	checksum := randutils.GenerateFullSha256(oauth2Cfg)
 
 	secret.Labels = map[string]string{
 		constants.LabelKey:       constants.LabelValue,
 		constants.SecretLabelKey: constants.Oauth2LabelValue,
 	}
 	secret.Annotations = map[string]string{constants.AnnotationOauth2SecretChecksumKey: checksum}
-	secret.Data = map[string][]byte{"oauth2-proxy.cfg": []byte(cfg)}
+	secret.Data = map[string][]byte{"oauth2-proxy.cfg": []byte(oauth2Cfg)}
 
 	return nil
 }
@@ -108,8 +108,8 @@ func kubeconfigSecretObject(object client.Object) *corev1.Secret {
 	}
 }
 
-func mutateKubeconfigSecret(secret *corev1.Secret, object client.Object) error {
-	kubeConfigStr := configuration.GetOIDCAppsControllerConfig().GetKubeConfigStr(object)
+func mutateKubeconfigSecret(secret *corev1.Secret, object client.Object, cfg *configuration.OIDCAppsControllerConfig) error {
+	kubeConfigStr := cfg.GetKubeConfigStr(object)
 
 	decodestr, err := base64.StdEncoding.DecodeString(kubeConfigStr)
 	if err != nil {
@@ -143,8 +143,8 @@ func oidcCaBundleSecretObject(object client.Object) *corev1.Secret {
 	}
 }
 
-func mutateOidcCaBundleSecret(secret *corev1.Secret, object client.Object) error {
-	oidcCABundle := configuration.GetOIDCAppsControllerConfig().GetOidcCABundle(object)
+func mutateOidcCaBundleSecret(secret *corev1.Secret, object client.Object, cfg *configuration.OIDCAppsControllerConfig) error {
+	oidcCABundle := cfg.GetOidcCABundle(object)
 
 	secret.Labels = map[string]string{
 		constants.LabelKey:       constants.LabelValue,
@@ -155,10 +155,10 @@ func mutateOidcCaBundleSecret(secret *corev1.Secret, object client.Object) error
 	return nil
 }
 
-func needsKubeconfigSecret(object client.Object) bool {
-	return configuration.GetOIDCAppsControllerConfig().GetKubeConfigStr(object) != ""
+func needsKubeconfigSecret(object client.Object, cfg *configuration.OIDCAppsControllerConfig) bool {
+	return cfg.GetKubeConfigStr(object) != ""
 }
 
-func needsOidcCaBundleSecret(object client.Object) bool {
-	return configuration.GetOIDCAppsControllerConfig().GetOidcCABundle(object) != ""
+func needsOidcCaBundleSecret(object client.Object, cfg *configuration.OIDCAppsControllerConfig) bool {
+	return cfg.GetOidcCABundle(object) != ""
 }

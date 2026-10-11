@@ -18,7 +18,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 
-	"github.com/nickytd/oidc-apps/pkg/configuration"
 	"github.com/nickytd/oidc-apps/pkg/constants"
 	"github.com/nickytd/oidc-apps/pkg/randutils"
 )
@@ -85,7 +84,7 @@ var _ = Describe("Oidc Apps HTTPRoute Deployment Target Test", Ordered, func() {
 					}
 
 					// Ensure configured labels are set on the HTTPRoute.
-					confTarget := configuration.GetOIDCAppsControllerConfig().FetchTarget(&httpRoute)
+					confTarget := extensionConfig.FetchTarget(ctx, &httpRoute)
 					wantHTTPRouteLabels := map[string]string{
 						constants.LabelKey: constants.LabelValue,
 					}

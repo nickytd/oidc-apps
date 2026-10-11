@@ -4,6 +4,7 @@
 package configuration
 
 import (
+	"context"
 	"strings"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -13,7 +14,7 @@ import (
 
 // GetHost return the domain name for a given workload target
 func (c *OIDCAppsControllerConfig) GetHost(object client.Object) string {
-	t := c.FetchTarget(object)
+	t := c.FetchTarget(context.Background(), object)
 	domain := c.Global.DomainName
 
 	prefix := object.GetName() + "-" + object.GetNamespace()
@@ -37,7 +38,7 @@ func (c *OIDCAppsControllerConfig) GetUpstreamTarget(object client.Object) strin
 	b := strings.Builder{}
 	protocol := "http"
 
-	t := c.FetchTarget(object)
+	t := c.FetchTarget(context.Background(), object)
 	if t.TargetProtocol == "https" {
 		protocol = "https"
 	}

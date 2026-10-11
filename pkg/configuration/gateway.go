@@ -4,6 +4,7 @@
 package configuration
 
 import (
+	"context"
 	"os"
 	"strings"
 
@@ -115,7 +116,7 @@ func (c *OIDCAppsControllerConfig) ShallCreateHTTPRoute(object client.Object) bo
 		return false
 	}
 
-	t := c.FetchTarget(object)
+	t := c.FetchTarget(context.Background(), object)
 	if t.HTTPRoute != nil {
 		if t.HTTPRoute.Create && len(t.HTTPRoute.ParentRefs) == 0 && !c.IsManagedGatewayEnabled() {
 			c.log.Info("WARNING: HTTPRoute configuration has empty parentRefs - HTTPRoute will not be attached to any Gateway",
@@ -149,7 +150,7 @@ func (c *OIDCAppsControllerConfig) GetManagedGatewayConf() *GatewayGlobalConf {
 
 // GetHTTPRouteHost returns the host for the HTTPRoute for a given workload target
 func (c *OIDCAppsControllerConfig) GetHTTPRouteHost(object client.Object) string {
-	t := c.FetchTarget(object)
+	t := c.FetchTarget(context.Background(), object)
 	domain := c.Global.DomainName
 
 	prefix := object.GetName() + "-" + object.GetNamespace()
@@ -172,7 +173,7 @@ func (c *OIDCAppsControllerConfig) GetHTTPRouteHost(object client.Object) string
 // When the target has no parentRefs and a managed gateway is enabled, returns a default
 // reference to the managed Gateway.
 func (c *OIDCAppsControllerConfig) GetHTTPRouteParentRefs(object client.Object) []HTTPRouteParentRef {
-	t := c.FetchTarget(object)
+	t := c.FetchTarget(context.Background(), object)
 	if t.HTTPRoute != nil && len(t.HTTPRoute.ParentRefs) > 0 {
 		return t.HTTPRoute.ParentRefs
 	}
@@ -196,7 +197,7 @@ func (c *OIDCAppsControllerConfig) GetHTTPRouteParentRefs(object client.Object) 
 
 // GetHTTPRouteAnnotations returns the HTTPRoute annotations for the given target
 func (c *OIDCAppsControllerConfig) GetHTTPRouteAnnotations(object client.Object) map[string]string {
-	t := c.FetchTarget(object)
+	t := c.FetchTarget(context.Background(), object)
 	if t.HTTPRoute != nil && t.HTTPRoute.Annotations != nil {
 		return t.HTTPRoute.Annotations
 	}
@@ -206,7 +207,7 @@ func (c *OIDCAppsControllerConfig) GetHTTPRouteAnnotations(object client.Object)
 
 // GetHTTPRouteLabels returns the HTTPRoute labels for the given target
 func (c *OIDCAppsControllerConfig) GetHTTPRouteLabels(object client.Object) map[string]string {
-	t := c.FetchTarget(object)
+	t := c.FetchTarget(context.Background(), object)
 	if t.HTTPRoute != nil && t.HTTPRoute.Labels != nil {
 		return t.HTTPRoute.Labels
 	}
@@ -217,7 +218,7 @@ func (c *OIDCAppsControllerConfig) GetHTTPRouteLabels(object client.Object) map[
 // GetHTTPRouteDefaultPath returns the default redirect path for the HTTPRoute of the given target.
 // The path must start with "/" to be valid; invalid paths are ignored.
 func (c *OIDCAppsControllerConfig) GetHTTPRouteDefaultPath(object client.Object) string {
-	t := c.FetchTarget(object)
+	t := c.FetchTarget(context.Background(), object)
 	if t.HTTPRoute != nil && isValidDefaultPath(t.HTTPRoute.DefaultPath) {
 		return t.HTTPRoute.DefaultPath
 	}

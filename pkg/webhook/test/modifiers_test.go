@@ -97,7 +97,7 @@ var _ = Describe("Cookie Secret Deterministic Generation Tests", func() {
 				WithObjects(deployment1, replicaSet1, pod1).
 				Build()
 
-			configuration.CreateControllerConfigOrDie(
+			extCfg := configuration.CreateControllerConfigOrDie(
 				filepath.Join(tmpDir, "config.yaml"),
 				configuration.WithClient(fakeClient),
 				configuration.WithLog(_log),
@@ -106,6 +106,7 @@ var _ = Describe("Cookie Secret Deterministic Generation Tests", func() {
 			localPodWebhook1 = &webhook.PodMutator{
 				Client:  fakeClient,
 				Decoder: admission.NewDecoder(s),
+				Config:  extCfg,
 			}
 		})
 
@@ -354,7 +355,7 @@ var _ = Describe("Cookie Secret Deterministic Generation Tests", func() {
 				WithObjects(deployment3, replicaSet3, pod3).
 				Build()
 
-			configuration.CreateControllerConfigOrDie(
+			extCfg := configuration.CreateControllerConfigOrDie(
 				filepath.Join(tmpDir, "config.yaml"),
 				configuration.WithClient(fakeClient),
 				configuration.WithLog(_log),
@@ -363,6 +364,7 @@ var _ = Describe("Cookie Secret Deterministic Generation Tests", func() {
 			localPodWebhook = &webhook.PodMutator{
 				Client:  fakeClient,
 				Decoder: admission.NewDecoder(s),
+				Config:  extCfg,
 			}
 		})
 
@@ -428,8 +430,6 @@ var _ = Describe("Cookie Secret Deterministic Generation Tests", func() {
 			replicaSet      *appsv1.ReplicaSet
 			pod             *corev1.Pod
 			localPodWebhook *webhook.PodMutator
-			savedGlobal     configuration.Global
-			savedTargets    []configuration.Target
 		)
 
 		BeforeEach(func() {
@@ -493,36 +493,35 @@ var _ = Describe("Cookie Secret Deterministic Generation Tests", func() {
 				WithObjects(deployment, replicaSet, pod).
 				Build()
 
-			cfg := configuration.GetOIDCAppsControllerConfig()
-			savedGlobal = cfg.Global
-			savedTargets = cfg.Targets
-
-			cfg.Global = configuration.Global{
-				DomainName: "example.org",
-				Gateway:    &configuration.GatewayGlobalConf{HTTPRoutes: &configuration.HTTPRoutesConf{Enabled: true}},
-				Oauth2Proxy: &configuration.Oauth2ProxyConfig{
-					ClientID:      "client-id",
-					ClientSecret:  "client-secret",
-					OidcIssuerURL: "https://oidc-provider.org",
-				},
-			}
-			cfg.Targets = []configuration.Target{
-				{
-					Name: "nginx",
-					LabelSelector: &metav1.LabelSelector{
-						MatchLabels: map[string]string{"app": "nginx"},
+			extCfg := &configuration.OIDCAppsControllerConfig{
+				Global: configuration.Global{
+					DomainName: "example.org",
+					Gateway:    &configuration.GatewayGlobalConf{HTTPRoutes: &configuration.HTTPRoutesConf{Enabled: true}},
+					Oauth2Proxy: &configuration.Oauth2ProxyConfig{
+						ClientID:      "client-id",
+						ClientSecret:  "client-secret",
+						OidcIssuerURL: "https://oidc-provider.org",
 					},
-					HTTPRoute: &configuration.HTTPRouteConf{
-						Create:     true,
-						HostPrefix: "my-httproute-prefix",
+				},
+				Targets: []configuration.Target{
+					{
+						Name: "nginx",
+						LabelSelector: &metav1.LabelSelector{
+							MatchLabels: map[string]string{"app": "nginx"},
+						},
+						HTTPRoute: &configuration.HTTPRouteConf{
+							Create:     true,
+							HostPrefix: "my-httproute-prefix",
+						},
 					},
 				},
 			}
-			cfg.SetClient(fakeClient)
+			extCfg.SetClient(fakeClient)
 
 			localPodWebhook = &webhook.PodMutator{
 				Client:  fakeClient,
 				Decoder: admission.NewDecoder(s),
+				Config:  extCfg,
 			}
 		})
 
@@ -536,12 +535,6 @@ var _ = Describe("Cookie Secret Deterministic Generation Tests", func() {
 			Expect(hostAnnotation).To(HaveSuffix(".example.org"),
 				"Host annotation should include the global domain")
 		})
-
-		AfterEach(func() {
-			cfg := configuration.GetOIDCAppsControllerConfig()
-			cfg.Global = savedGlobal
-			cfg.Targets = savedTargets
-		})
 	})
 
 	Context("when extraArgs are configured with valid and invalid entries", func() {
@@ -550,8 +543,6 @@ var _ = Describe("Cookie Secret Deterministic Generation Tests", func() {
 			replicaSet      *appsv1.ReplicaSet
 			pod             *corev1.Pod
 			localPodWebhook *webhook.PodMutator
-			savedGlobal     configuration.Global
-			savedTargets    []configuration.Target
 		)
 
 		BeforeEach(func() {
@@ -615,37 +606,36 @@ var _ = Describe("Cookie Secret Deterministic Generation Tests", func() {
 				WithObjects(deployment, replicaSet, pod).
 				Build()
 
-			cfg := configuration.GetOIDCAppsControllerConfig()
-			savedGlobal = cfg.Global
-			savedTargets = cfg.Targets
-
-			cfg.Global = configuration.Global{
-				DomainName: "example.org",
-				Oauth2Proxy: &configuration.Oauth2ProxyConfig{
-					ClientID:      "client-id",
-					ClientSecret:  "client-secret",
-					OidcIssuerURL: "https://oidc-provider.org",
-					ExtraArgs: []string{
-						"--set-xauthrequest=true",
-						"invalid-no-dashes",
-						"--valid-flag",
-						"not a flag at all",
+			extCfg := &configuration.OIDCAppsControllerConfig{
+				Global: configuration.Global{
+					DomainName: "example.org",
+					Oauth2Proxy: &configuration.Oauth2ProxyConfig{
+						ClientID:      "client-id",
+						ClientSecret:  "client-secret",
+						OidcIssuerURL: "https://oidc-provider.org",
+						ExtraArgs: []string{
+							"--set-xauthrequest=true",
+							"invalid-no-dashes",
+							"--valid-flag",
+							"not a flag at all",
+						},
+					},
+				},
+				Targets: []configuration.Target{
+					{
+						Name: "nginx",
+						LabelSelector: &metav1.LabelSelector{
+							MatchLabels: map[string]string{"app": "nginx"},
+						},
 					},
 				},
 			}
-			cfg.Targets = []configuration.Target{
-				{
-					Name: "nginx",
-					LabelSelector: &metav1.LabelSelector{
-						MatchLabels: map[string]string{"app": "nginx"},
-					},
-				},
-			}
-			cfg.SetClient(fakeClient)
+			extCfg.SetClient(fakeClient)
 
 			localPodWebhook = &webhook.PodMutator{
 				Client:  fakeClient,
 				Decoder: admission.NewDecoder(s),
+				Config:  extCfg,
 			}
 		})
 
@@ -665,12 +655,6 @@ var _ = Describe("Cookie Secret Deterministic Generation Tests", func() {
 			Expect(oauth2Args).To(ContainElement("--valid-flag"))
 			Expect(oauth2Args).NotTo(ContainElement("invalid-no-dashes"))
 			Expect(oauth2Args).NotTo(ContainElement("not a flag at all"))
-		})
-
-		AfterEach(func() {
-			cfg := configuration.GetOIDCAppsControllerConfig()
-			cfg.Global = savedGlobal
-			cfg.Targets = savedTargets
 		})
 	})
 
@@ -788,7 +772,7 @@ var _ = Describe("Cookie Secret Deterministic Generation Tests", func() {
 				WithObjects(deployment, replicaSet, initialPod).
 				Build()
 
-			configuration.CreateControllerConfigOrDie(
+			extCfg := configuration.CreateControllerConfigOrDie(
 				filepath.Join(tmpDir, "config.yaml"),
 				configuration.WithClient(fakeClient),
 				configuration.WithLog(_log),
@@ -797,6 +781,7 @@ var _ = Describe("Cookie Secret Deterministic Generation Tests", func() {
 			localPodWebhook = &webhook.PodMutator{
 				Client:  fakeClient,
 				Decoder: admission.NewDecoder(s),
+				Config:  extCfg,
 			}
 		})
 
@@ -874,8 +859,6 @@ var _ = Describe("Cookie Secret Deterministic Generation Tests", func() {
 			replicaSet      *appsv1.ReplicaSet
 			pod             *corev1.Pod
 			localPodWebhook *webhook.PodMutator
-			savedGlobal     configuration.Global
-			savedTargets    []configuration.Target
 		)
 
 		BeforeEach(func() {
@@ -955,34 +938,33 @@ var _ = Describe("Cookie Secret Deterministic Generation Tests", func() {
 				WithObjects(deployment, replicaSet, pod).
 				Build()
 
-			cfg := configuration.GetOIDCAppsControllerConfig()
-			savedGlobal = cfg.Global
-			savedTargets = cfg.Targets
-
 			// Configure without any kubeRbacProxy kubeconfig — kube-rbac-proxy should
 			// use the pod's service account token for SubjectAccessReviews instead.
-			cfg.Global = configuration.Global{
-				DomainName: "example.org",
-				Oauth2Proxy: &configuration.Oauth2ProxyConfig{
-					ClientID:      "client-id",
-					ClientSecret:  "client-secret",
-					OidcIssuerURL: "https://oidc-provider.org",
+			extCfg := &configuration.OIDCAppsControllerConfig{
+				Global: configuration.Global{
+					DomainName: "example.org",
+					Oauth2Proxy: &configuration.Oauth2ProxyConfig{
+						ClientID:      "client-id",
+						ClientSecret:  "client-secret",
+						OidcIssuerURL: "https://oidc-provider.org",
+					},
+					// KubeRbacProxy intentionally nil: no kubeConfigStr, no kubeSecretRef
 				},
-				// KubeRbacProxy intentionally nil: no kubeConfigStr, no kubeSecretRef
-			}
-			cfg.Targets = []configuration.Target{
-				{
-					Name: "nginx",
-					LabelSelector: &metav1.LabelSelector{
-						MatchLabels: map[string]string{"app": "nginx"},
+				Targets: []configuration.Target{
+					{
+						Name: "nginx",
+						LabelSelector: &metav1.LabelSelector{
+							MatchLabels: map[string]string{"app": "nginx"},
+						},
 					},
 				},
 			}
-			cfg.SetClient(fakeClient)
+			extCfg.SetClient(fakeClient)
 
 			localPodWebhook = &webhook.PodMutator{
 				Client:  fakeClient,
 				Decoder: admission.NewDecoder(s),
+				Config:  extCfg,
 			}
 		})
 
@@ -1061,12 +1043,6 @@ var _ = Describe("Cookie Secret Deterministic Generation Tests", func() {
 					}
 				}
 			}
-		})
-
-		AfterEach(func() {
-			cfg := configuration.GetOIDCAppsControllerConfig()
-			cfg.Global = savedGlobal
-			cfg.Targets = savedTargets
 		})
 	})
 })

@@ -31,6 +31,7 @@ type PodMutator struct {
 	Client          client.Client
 	Decoder         webhook.AdmissionDecoder
 	ImagePullSecret string
+	Config          *configuration.OIDCAppsControllerConfig
 }
 
 // Handle provides interface implementation for the PodMutator
@@ -54,7 +55,7 @@ func (p *PodMutator) Handle(ctx context.Context, req webhook.AdmissionRequest) w
 
 	// Simply return it the pod is not part of the described targets
 
-	target, owner := isTarget(ctx, p.Client, pod)
+	target, owner := isTarget(ctx, p.Client, p.Config, pod)
 	if !target {
 		return webhook.Allowed("not a target")
 	}
@@ -62,19 +63,19 @@ func (p *PodMutator) Handle(ctx context.Context, req webhook.AdmissionRequest) w
 	_log.Info("handling pod admission request")
 
 	patch := pod.DeepCopy()
-	clientID := configuration.GetOIDCAppsControllerConfig().GetClientID(owner)
-	issuerURL := configuration.GetOIDCAppsControllerConfig().GetOidcIssuerURL(owner)
-	upstream := configuration.GetOIDCAppsControllerConfig().GetUpstreamTarget(owner)
+	clientID := p.Config.GetClientID(owner)
+	issuerURL := p.Config.GetOidcIssuerURL(owner)
+	upstream := p.Config.GetUpstreamTarget(owner)
 	upstreamURL := buildUpstreamURL(upstream, patch.Spec)
 	suffix := fetchTargetSuffix(owner)
 
 	// Add the OIDC annotation to the deployment template
-	addAnnotations(patch)
+	addAnnotations(patch, p.Config)
 
 	// Add required annotations to pod spec template
 	addPodAnnotations(patch,
 		map[string]string{
-			constants.AnnotationHostKey: resolveHost(owner),
+			constants.AnnotationHostKey: resolveHost(owner, p.Config),
 		},
 	)
 
@@ -92,10 +93,10 @@ func (p *PodMutator) Handle(ctx context.Context, req webhook.AdmissionRequest) w
 		&patch.Spec,
 	)
 
-	if shallAddOidcCaSecretName(owner) {
+	if shallAddOidcCaSecretName(owner, p.Config) {
 		addProjectedSecretSourceVolume(
 			constants.Oauth2VolumeName,
-			fetchOidcCASecretName(suffix, owner),
+			fetchOidcCASecretName(suffix, owner, p.Config),
 			&patch.Spec,
 		)
 	}
@@ -108,28 +109,28 @@ func (p *PodMutator) Handle(ctx context.Context, req webhook.AdmissionRequest) w
 	)
 
 	// Add an optional kubeconfig secret for the kube-rbac-proxy
-	if shallAddKubeConfigSecretName(owner) {
+	if shallAddKubeConfigSecretName(owner, p.Config) {
 		addProjectedSecretSourceVolume(
 			constants.KubeRbacProxyVolumeName,
-			fetchKubconfigSecretName(suffix, owner),
+			fetchKubconfigSecretName(suffix, owner, p.Config),
 			&patch.Spec,
 		)
 	}
 
 	// Add an optional oidc ca secret for the kube-rbac-proxy
-	if shallAddOidcCaSecretName(owner) {
+	if shallAddOidcCaSecretName(owner, p.Config) {
 		addProjectedSecretSourceVolume(
 			constants.KubeRbacProxyVolumeName,
-			fetchOidcCASecretName(suffix, owner),
+			fetchOidcCASecretName(suffix, owner, p.Config),
 			&patch.Spec,
 		)
 	}
 
 	// Add the OAUTH2 proxy sidecar to the pod template
-	addProxyContainer(constants.ContainerNameOauth2Proxy, &patch.Spec, getOIDCProxyContainer(_log, &patch.Spec, owner))
+	addProxyContainer(constants.ContainerNameOauth2Proxy, &patch.Spec, getOIDCProxyContainer(_log, &patch.Spec, owner, p.Config))
 
 	// Add the kube-rbac-proxy sidecar to the pod template
-	addProxyContainer(constants.ContainerNameKubeRbacProxy, &patch.Spec, getKubeRbacProxyContainer(clientID, issuerURL, upstreamURL, patch, owner))
+	addProxyContainer(constants.ContainerNameKubeRbacProxy, &patch.Spec, getKubeRbacProxyContainer(clientID, issuerURL, upstreamURL, patch, owner, p.Config))
 
 	// Add image pull secret if the proxy container images are served from private registry
 	if len(p.ImagePullSecret) > 0 {
@@ -143,9 +144,9 @@ func (p *PodMutator) Handle(ctx context.Context, req webhook.AdmissionRequest) w
 	// URL needs to reflect the target pod index. When the redirect URL is constructed the pod index is appended to the
 	// host name.
 	if present {
-		hostPrefix := resolveHost(owner)
-		if configuration.GetOIDCAppsControllerConfig().GetRedirectURL(owner) != "" {
-			hostPrefix = configuration.GetOIDCAppsControllerConfig().GetRedirectURL(owner)
+		hostPrefix := resolveHost(owner, p.Config)
+		if p.Config.GetRedirectURL(owner) != "" {
+			hostPrefix = p.Config.GetRedirectURL(owner)
 			// It does container https:// prefix and /oauth2/callback suffix
 			hostPrefix = strings.TrimPrefix(hostPrefix, "https://")
 			hostPrefix = strings.TrimSuffix(hostPrefix, "/oauth2/callback")
@@ -189,7 +190,7 @@ func (p *PodMutator) Handle(ctx context.Context, req webhook.AdmissionRequest) w
 	return admission.PatchResponseFromRaw(original, patched)
 }
 
-func isTarget(ctx context.Context, c client.Client, pod *corev1.Pod) (bool, client.Object) {
+func isTarget(ctx context.Context, c client.Client, cfg *configuration.OIDCAppsControllerConfig, pod *corev1.Pod) (bool, client.Object) {
 	// Identify the workload
 	owners := pod.GetOwnerReferences()
 	if len(owners) == 0 {
@@ -207,7 +208,7 @@ func isTarget(ctx context.Context, c client.Client, pod *corev1.Pod) (bool, clie
 				return false, nil
 			}
 
-			return configuration.GetOIDCAppsControllerConfig().Match(statefulset), statefulset
+			return cfg.Match(ctx, statefulset), statefulset
 		}
 
 		if o.Kind == "ReplicaSet" {
@@ -240,7 +241,7 @@ func isTarget(ctx context.Context, c client.Client, pod *corev1.Pod) (bool, clie
 				return false, nil
 			}
 
-			return configuration.GetOIDCAppsControllerConfig().Match(deployment), deployment
+			return cfg.Match(ctx, deployment), deployment
 		}
 	}
 

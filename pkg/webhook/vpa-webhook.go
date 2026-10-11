@@ -28,6 +28,7 @@ var _ admission.Handler = &VPAMutator{}
 type VPAMutator struct {
 	Client  client.Client
 	Decoder webhook.AdmissionDecoder
+	Config  *configuration.OIDCAppsControllerConfig
 }
 
 // Handle provides interface implementation for the PodMutator
@@ -49,8 +50,8 @@ func (v *VPAMutator) Handle(ctx context.Context, req webhook.AdmissionRequest) w
 		return webhook.Allowed("vpa does not have a target ref")
 	}
 
-	if !configuration.GetOIDCAppsControllerConfig().Match(vpa) {
-		if !isTargetRefMatched(ctx, v.Client, vpa.GetNamespace(), vpa.Spec.TargetRef) {
+	if !v.Config.Match(ctx, vpa) {
+		if !isTargetRefMatched(ctx, v.Client, v.Config, vpa.GetNamespace(), vpa.Spec.TargetRef) {
 			return webhook.Allowed("vpa not matched")
 		}
 	}
@@ -96,7 +97,7 @@ func (v *VPAMutator) Handle(ctx context.Context, req webhook.AdmissionRequest) w
 	return admission.PatchResponseFromRaw(original, patched)
 }
 
-func isTargetRefMatched(ctx context.Context, c client.Client, namespace string, ref *autoscalingv1.CrossVersionObjectReference) bool {
+func isTargetRefMatched(ctx context.Context, c client.Client, cfg *configuration.OIDCAppsControllerConfig, namespace string, ref *autoscalingv1.CrossVersionObjectReference) bool {
 	switch ref.Kind {
 	case "Deployment":
 		deployment := &appsv1.Deployment{}
@@ -106,7 +107,7 @@ func isTargetRefMatched(ctx context.Context, c client.Client, namespace string, 
 			return false
 		}
 
-		return configuration.GetOIDCAppsControllerConfig().Match(deployment)
+		return cfg.Match(ctx, deployment)
 
 	case "StatefulSet":
 		statefulset := &appsv1.StatefulSet{}
@@ -116,7 +117,7 @@ func isTargetRefMatched(ctx context.Context, c client.Client, namespace string, 
 			return false
 		}
 
-		return configuration.GetOIDCAppsControllerConfig().Match(statefulset)
+		return cfg.Match(ctx, statefulset)
 	default:
 	}
 

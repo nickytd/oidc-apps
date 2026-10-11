@@ -220,7 +220,7 @@ func fetchPredicates(extensionConfig *configuration.OIDCAppsControllerConfig) pr
 	// matchOrLabeled accepts an object when it matches the extension configuration
 	// or already carries the controller's label.
 	matchOrLabeled := func(eventType string, o client.Object) bool {
-		if extensionConfig.Match(o) {
+		if extensionConfig.Match(context.Background(), o) {
 			_log.V(9).Info(eventType+" event", "name", o.GetName(), "namespace", o.GetNamespace())
 
 			return true
@@ -405,7 +405,7 @@ func addDeploymentController(mgr manager.Manager) error {
 			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{}))
 	}
 
-	return controllerBuilder.Complete(&controllers.DeploymentReconciler{Client: mgr.GetClient()})
+	return controllerBuilder.Complete(&controllers.DeploymentReconciler{Client: mgr.GetClient(), Config: extensionConfig})
 }
 
 func addStatefulSetController(mgr manager.Manager) error {
@@ -446,7 +446,7 @@ func addStatefulSetController(mgr manager.Manager) error {
 			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{}))
 	}
 
-	return controllerBuilder.Complete(&controllers.StatefulSetReconciler{Client: mgr.GetClient()})
+	return controllerBuilder.Complete(&controllers.StatefulSetReconciler{Client: mgr.GetClient(), Config: extensionConfig})
 }
 
 // Add certificate manager in case no external certificate manager is available
@@ -511,6 +511,7 @@ func addWebhooks(mgr manager.Manager, o *Options) error {
 			Client:          mgr.GetClient(),
 			Decoder:         admission.NewDecoder(scheme.Scheme),
 			ImagePullSecret: o.registrySecret,
+			Config:          extensionConfig,
 		}},
 	)
 
@@ -525,6 +526,7 @@ func addWebhooks(mgr manager.Manager, o *Options) error {
 			&webhook.Admission{Handler: &oidcappswebhook.VPAMutator{
 				Client:  mgr.GetClient(),
 				Decoder: admission.NewDecoder(s),
+				Config:  extensionConfig,
 			}},
 		)
 	}

@@ -50,7 +50,7 @@ var _ = BeforeEach(func() {
 		WithObjects(nonTargetVpa).
 		Build()
 
-	configuration.CreateControllerConfigOrDie(
+	extCfg := configuration.CreateControllerConfigOrDie(
 		filepath.Join(tmpDir, "config.yaml"),
 		configuration.WithClient(fakeClient),
 		configuration.WithLog(_log),
@@ -59,6 +59,7 @@ var _ = BeforeEach(func() {
 	vpaWebhook = &webhook.VPAMutator{
 		Client:  fakeClient,
 		Decoder: admission.NewDecoder(s),
+		Config:  extCfg,
 	}
 })
 

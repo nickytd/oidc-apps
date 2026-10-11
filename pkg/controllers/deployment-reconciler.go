@@ -17,6 +17,7 @@ import (
 // DeploymentReconciler holds configuration for the reconciler
 type DeploymentReconciler struct {
 	Client client.Client
+	Config *configuration.OIDCAppsControllerConfig
 }
 
 // Reconcile creates the auth & zutz secrets mounted to the target deployment
@@ -37,14 +38,14 @@ func (d *DeploymentReconciler) Reconcile(ctx context.Context, request reconcile.
 
 	_log.V(9).Info("handling deployment reconcile request")
 
-	if !configuration.GetOIDCAppsControllerConfig().Match(reconciledDeployment) {
+	if !d.Config.Match(ctx, reconciledDeployment) {
 		_log.V(9).Info("reconciled deployment is no longer an oidc-application-controller target, pruning owned resources ...")
 
 		// The deployment still exists but no longer matches the targeting
 		// configuration, so owner-reference garbage collection will not fire.
 		// Prune the previously created owned resources explicitly. This also covers
 		// de-targeting by removing the matching labels, which leaves GetLabels() empty.
-		if err := deleteOwnedResources(ctx, d.Client, reconciledDeployment); err != nil {
+		if err := deleteOwnedResources(ctx, d.Client, d.Config, reconciledDeployment); err != nil {
 			return reconcile.Result{}, err
 		}
 
@@ -58,7 +59,7 @@ func (d *DeploymentReconciler) Reconcile(ctx context.Context, request reconcile.
 	// On deletion the owned resources carry owner references to this deployment,
 	// so Kubernetes garbage collection removes them automatically. The dependency
 	// reconcile below is a no-op once the deletion timestamp is set.
-	if err := reconcileDeploymentDependencies(ctx, d.Client, reconciledDeployment); err != nil {
+	if err := reconcileDeploymentDependencies(ctx, d.Client, d.Config, reconciledDeployment); err != nil {
 		return reconcile.Result{}, err
 	}
 

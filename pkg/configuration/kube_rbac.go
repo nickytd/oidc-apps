@@ -3,13 +3,17 @@
 
 package configuration
 
-import "sigs.k8s.io/controller-runtime/pkg/client"
+import (
+	"context"
+
+	"sigs.k8s.io/controller-runtime/pkg/client"
+)
 
 // GetKubeSecretName returns the kubeconfig secret name of the target workload
 func (c *OIDCAppsControllerConfig) GetKubeSecretName(object client.Object) string {
 	secretName := ""
 
-	t := c.FetchTarget(object)
+	t := c.FetchTarget(context.Background(), object)
 	if t.KubeRbacProxy != nil &&
 		t.KubeRbacProxy.KubeSecretRef != nil &&
 		t.KubeRbacProxy.KubeSecretRef.Name != "" {
@@ -29,7 +33,7 @@ func (c *OIDCAppsControllerConfig) GetKubeSecretName(object client.Object) strin
 func (c *OIDCAppsControllerConfig) GetKubeConfigStr(object client.Object) string {
 	kubeConfig := ""
 
-	t := c.FetchTarget(object)
+	t := c.FetchTarget(context.Background(), object)
 	if t.KubeRbacProxy != nil &&
 		t.KubeRbacProxy.KubeConfigStr != "" {
 		return t.KubeRbacProxy.KubeConfigStr

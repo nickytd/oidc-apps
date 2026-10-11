@@ -63,6 +63,8 @@ var (
 	clt client.Client
 	sch *runtime.Scheme
 
+	extensionConfig *configuration.OIDCAppsControllerConfig
+
 	_log = logr.FromSlogHandler(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
 		Level: slog.LevelDebug,
 	}))
@@ -70,7 +72,7 @@ var (
 
 var _ = BeforeSuite(func() {
 	// Setup oidc-apps-controller configuration
-	configuration.CreateControllerConfigOrDie(filepath.Join("config", "oidc-apps.yaml"))
+	extensionConfig = configuration.CreateControllerConfigOrDie(filepath.Join("config", "oidc-apps.yaml"))
 
 	// Set NAMESPACE env var for managed gateway tests
 	Expect(os.Setenv(constants.NAMESPACE, "default")).To(Succeed())
@@ -135,6 +137,7 @@ var _ = BeforeSuite(func() {
 	server.Register(constants.PodWebHookPath, &webhook.Admission{Handler: &oidcappswebhook.PodMutator{
 		Client:  clt,
 		Decoder: admission.NewDecoder(sch),
+		Config:  extensionConfig,
 	}})
 
 	// Set up the deployment reconciler in oidc-apps-controller
@@ -177,7 +180,7 @@ var _ = BeforeSuite(func() {
 			&corev1.Pod{},
 			handler.EnqueueRequestsFromMapFunc(oidcappscontroller.PodMapFuncForDeployment(mgr)),
 			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})).
-		Complete(&controllers.DeploymentReconciler{Client: mgr.GetClient()})
+		Complete(&controllers.DeploymentReconciler{Client: mgr.GetClient(), Config: extensionConfig})
 	Expect(err).ShouldNot(HaveOccurred())
 
 	// Set up the statefulSet reconciler in oidc-apps-controller
@@ -212,11 +215,10 @@ var _ = BeforeSuite(func() {
 			&gatewayv1.HTTPRoute{},
 			handler.EnqueueRequestsFromMapFunc(oidcappscontroller.HTTPRouteMapFuncForStatefulset(mgr)),
 			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})).
-		Complete(&controllers.StatefulSetReconciler{Client: mgr.GetClient()})
+		Complete(&controllers.StatefulSetReconciler{Client: mgr.GetClient(), Config: extensionConfig})
 	Expect(err).ShouldNot(HaveOccurred())
 
 	// Register managed gateway reconciler
-	extensionConfig := configuration.GetOIDCAppsControllerConfig()
 	if extensionConfig.IsManagedGatewayEnabled() {
 		namespace := os.Getenv(constants.NAMESPACE)
 

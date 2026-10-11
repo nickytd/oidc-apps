@@ -20,7 +20,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 
-	"github.com/nickytd/oidc-apps/pkg/configuration"
 	"github.com/nickytd/oidc-apps/pkg/constants"
 	"github.com/nickytd/oidc-apps/pkg/randutils"
 )
@@ -98,7 +97,7 @@ var _ = Describe("Oidc Apps Deployment Target Test", Ordered, func() {
 					}
 
 					// Ensure configured labels are set on the ingress.
-					confTarget := configuration.GetOIDCAppsControllerConfig().FetchTarget(&ingress)
+					confTarget := extensionConfig.FetchTarget(ctx, &ingress)
 					wantIngressLabels := map[string]string{
 						constants.LabelKey: constants.LabelValue,
 					}

@@ -29,9 +29,9 @@ func ingressForDeploymentObject(object client.Object) *networkingv1.Ingress {
 	}
 }
 
-func mutateIngressForDeployment(ingress *networkingv1.Ingress, object client.Object) error {
+func mutateIngressForDeployment(ingress *networkingv1.Ingress, object client.Object, cfg *configuration.OIDCAppsControllerConfig) error {
 	suffix := randutils.GenerateSha256(object.GetName() + "-" + object.GetNamespace())
-	extConfig := configuration.GetOIDCAppsControllerConfig()
+	extConfig := cfg
 	ingressClassName := new(extConfig.GetIngressClassName(object))
 	ingressTLSSecretName := extConfig.GetIngressTLSSecretName(object)
 	host := extConfig.GetHost(object)
@@ -76,7 +76,7 @@ func mutateIngressForDeployment(ingress *networkingv1.Ingress, object client.Obj
 		ingress.Annotations = annotations
 	}
 
-	applyIngressDefaultPathRedirect(ingress, object)
+	applyIngressDefaultPathRedirect(ingress, object, cfg)
 
 	extraLabels := extConfig.GetIngressLabels(object)
 	maps.Copy(ingress.Labels, extraLabels)
@@ -96,9 +96,9 @@ func ingressForStatefulSetPodObject(pod *corev1.Pod, object client.Object) *netw
 	}
 }
 
-func mutateIngressForStatefulSetPod(ingress *networkingv1.Ingress, pod *corev1.Pod, object client.Object) error {
+func mutateIngressForStatefulSetPod(ingress *networkingv1.Ingress, pod *corev1.Pod, object client.Object, cfg *configuration.OIDCAppsControllerConfig) error {
 	suffix := randutils.GenerateSha256(pod.GetName() + "-" + pod.GetNamespace())
-	extConfig := configuration.GetOIDCAppsControllerConfig()
+	extConfig := cfg
 	ingressClassName := new(extConfig.GetIngressClassName(object))
 	ingressTLSSecretName := extConfig.GetIngressTLSSecretName(object)
 	index := fetchStrIndexIfPresent(pod)
@@ -151,7 +151,7 @@ func mutateIngressForStatefulSetPod(ingress *networkingv1.Ingress, pod *corev1.P
 		ingress.Annotations = annotations
 	}
 
-	applyIngressDefaultPathRedirect(ingress, object)
+	applyIngressDefaultPathRedirect(ingress, object, cfg)
 
 	extraLabels := extConfig.GetIngressLabels(object)
 	maps.Copy(ingress.Labels, extraLabels)
@@ -159,8 +159,8 @@ func mutateIngressForStatefulSetPod(ingress *networkingv1.Ingress, pod *corev1.P
 	return nil
 }
 
-func applyIngressDefaultPathRedirect(ingress *networkingv1.Ingress, object client.Object) {
-	defaultPath := configuration.GetOIDCAppsControllerConfig().GetIngressDefaultPath(object)
+func applyIngressDefaultPathRedirect(ingress *networkingv1.Ingress, object client.Object, cfg *configuration.OIDCAppsControllerConfig) {
+	defaultPath := cfg.GetIngressDefaultPath(object)
 	key := "nginx.ingress.kubernetes.io/configuration-snippet"
 
 	if defaultPath == "" {

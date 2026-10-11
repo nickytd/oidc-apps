@@ -13,13 +13,13 @@ import (
 )
 
 // Match accepts a client.Object and verifies if is a target defined in the controller configuration
-func (c *OIDCAppsControllerConfig) Match(o client.Object) bool {
-	if c == nil || c.Targets == nil || len(c.Targets) == 0 {
+func (c *OIDCAppsControllerConfig) Match(ctx context.Context, o client.Object) bool {
+	if c == nil || len(c.Targets) == 0 {
 		return false
 	}
 
 	for _, t := range c.Targets {
-		if c.targetMatchesLabels(t, o) {
+		if c.targetMatchesLabels(ctx, t, o) {
 			return true
 		}
 	}
@@ -28,12 +28,12 @@ func (c *OIDCAppsControllerConfig) Match(o client.Object) bool {
 }
 
 // FetchTarget fetches the target associated with the given object.
-func (c *OIDCAppsControllerConfig) FetchTarget(o client.Object) Target {
+func (c *OIDCAppsControllerConfig) FetchTarget(ctx context.Context, o client.Object) Target {
 	var targets []Target
 
 	for _, t := range c.Targets {
 		target := t
-		if c.targetMatchesLabels(target, o) {
+		if c.targetMatchesLabels(ctx, target, o) {
 			targets = append(targets, target)
 		}
 	}
@@ -49,9 +49,11 @@ func (c *OIDCAppsControllerConfig) FetchTarget(o client.Object) Target {
 	return Target{}
 }
 
-func (c *OIDCAppsControllerConfig) targetMatchesLabels(t Target, o client.Object) bool {
+func (c *OIDCAppsControllerConfig) targetMatchesLabels(ctx context.Context, t Target, o client.Object) bool {
 	selector, err := metav1.LabelSelectorAsSelector(t.LabelSelector)
 	if err != nil {
+		c.logMatchError(err, "failed to parse target label selector", t, o)
+
 		return false
 	}
 
@@ -65,13 +67,16 @@ func (c *OIDCAppsControllerConfig) targetMatchesLabels(t Target, o client.Object
 
 	namespace := &corev1.Namespace{}
 
-	err = c.client.Get(context.TODO(), client.ObjectKey{Name: o.GetNamespace()}, namespace)
-	if err != nil {
+	if err = c.client.Get(ctx, client.ObjectKey{Name: o.GetNamespace()}, namespace); err != nil {
+		c.logMatchError(err, "failed to get namespace for target match", t, o)
+
 		return false
 	}
 
 	namespaceSelector, err := metav1.LabelSelectorAsSelector(t.NamespaceSelector)
 	if err != nil {
+		c.logMatchError(err, "failed to parse target namespace selector", t, o)
+
 		return false
 	}
 
@@ -82,13 +87,18 @@ func (c *OIDCAppsControllerConfig) targetMatchesLabels(t Target, o client.Object
 	return selector.Matches(labels.Set(o.GetLabels())) && namespaceSelector.Matches(labels.Set(namespace.GetLabels()))
 }
 
-// GetTargetLabelSelector returns the label selector for the given target
-func (c *OIDCAppsControllerConfig) GetTargetLabelSelector(o client.Object) *metav1.LabelSelector {
-	t := c.FetchTarget(o)
-
-	if t.LabelSelector != nil {
-		return t.LabelSelector
+// logMatchError logs matching failures without masking them as silent non-matches.
+func (c *OIDCAppsControllerConfig) logMatchError(err error, message string, t Target, o client.Object) {
+	if c.log.IsZero() {
+		return
 	}
 
-	return nil
+	c.log.Error(err, message, "target", t.Name, "object", o.GetNamespace()+"/"+o.GetName())
+}
+
+// GetTargetLabelSelector returns the label selector for the given target
+func (c *OIDCAppsControllerConfig) GetTargetLabelSelector(ctx context.Context, o client.Object) *metav1.LabelSelector {
+	t := c.FetchTarget(ctx, o)
+
+	return t.LabelSelector
 }

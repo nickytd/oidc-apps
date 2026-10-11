@@ -37,19 +37,18 @@ func (d *DeploymentReconciler) Reconcile(ctx context.Context, request reconcile.
 
 	_log.V(9).Info("handling deployment reconcile request")
 
-	if reconciledDeployment.GetLabels() != nil {
-		if !configuration.GetOIDCAppsControllerConfig().Match(reconciledDeployment) {
-			_log.V(9).Info("reconciled deployment is no longer an oidc-application-controller target, pruning owned resources ...")
+	if !configuration.GetOIDCAppsControllerConfig().Match(reconciledDeployment) {
+		_log.V(9).Info("reconciled deployment is no longer an oidc-application-controller target, pruning owned resources ...")
 
-			// The deployment still exists but no longer matches the targeting
-			// configuration, so owner-reference garbage collection will not fire.
-			// Prune the previously created owned resources explicitly.
-			if err := deleteOwnedResources(ctx, d.Client, reconciledDeployment); err != nil {
-				return reconcile.Result{}, err
-			}
-
-			return reconcile.Result{}, nil
+		// The deployment still exists but no longer matches the targeting
+		// configuration, so owner-reference garbage collection will not fire.
+		// Prune the previously created owned resources explicitly. This also covers
+		// de-targeting by removing the matching labels, which leaves GetLabels() empty.
+		if err := deleteOwnedResources(ctx, d.Client, reconciledDeployment); err != nil {
+			return reconcile.Result{}, err
 		}
+
+		return reconcile.Result{}, nil
 	}
 
 	if !hasOidcAppsPods(ctx, d.Client, reconciledDeployment) {

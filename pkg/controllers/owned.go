@@ -45,19 +45,6 @@ func deleteOwnedResources(ctx context.Context, c client.Client, cfg *configurati
 		_log.V(9).Info("Deleted", "name", s.Name, "namespace", s.Namespace)
 	}
 
-	ingresses, err := fetchOidcAppsIngress(ctx, c, object)
-	if err != nil {
-		return err
-	}
-
-	for _, s := range ingresses.Items {
-		if err = c.Delete(ctx, &s); client.IgnoreNotFound(err) != nil {
-			return fmt.Errorf("failed to delete ingress %s/%s: %w", s.Namespace, s.Name, err)
-		}
-
-		_log.V(9).Info("Deleted", "name", s.Name, "namespace", s.Namespace)
-	}
-
 	httpRoutes, err := fetchOidcAppsHTTPRoutes(ctx, c, cfg, object)
 	if err != nil {
 		return err

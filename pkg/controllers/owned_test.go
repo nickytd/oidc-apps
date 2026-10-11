@@ -11,13 +11,13 @@ import (
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	networkingv1 "k8s.io/api/networking/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/nickytd/oidc-apps/pkg/configuration"
 	"github.com/nickytd/oidc-apps/pkg/constants"
@@ -78,7 +78,7 @@ func newOwnedResourceClient(t *testing.T, objs ...client.Object) client.Client {
 	s := scheme.Scheme
 	require.NoError(t, corev1.AddToScheme(s))
 	require.NoError(t, appsv1.AddToScheme(s))
-	require.NoError(t, networkingv1.AddToScheme(s))
+	require.NoError(t, gatewayv1.Install(s))
 
 	return fake.NewClientBuilder().
 		WithScheme(s).

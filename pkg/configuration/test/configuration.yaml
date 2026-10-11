@@ -35,11 +35,9 @@ targets:
         - {key: "app.kubernetes.io/name", operator: "In", values: ["test-02"]}
     targetPort: 8443
     targetProtocol: https
-    ingress:
+    httpRoute:
       create: true
       hostPrefix: "test-02-prefix"
-      tlsSecretRef:
-        name: "ingress-tls"
     oauth2Proxy:
       scope: "openid email target"
       clientId: "client-id-target"
@@ -72,7 +70,7 @@ targets:
     labelSelector:
       matchLabels:
         app.kubernetes.io/name: test-03
-    ingress:
+    httpRoute:
       host: "this.overwrites"
 
   # A target without explicit ingress host

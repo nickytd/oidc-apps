@@ -161,11 +161,12 @@ Update `TestGetRedirectURLWithHTTPRoute`: its comment claims "GetHost uses ingre
 ```go
 	// GetRedirectURL falls through to https://{GetHost}/oauth2/callback.
 	// GetHost now reads httpRoute.Host, so test-06's custom host is used.
+	// strings.Cut("custom.httproute.host", ".") → prefix="custom", domain="httproute.host"
 	redirectURL := extensionConfig.Resolve(t.Context(), target).GetRedirectURL()
-	g.Expect(redirectURL).To(Equal("https://custom.httproute/oauth2/callback"))
+	g.Expect(redirectURL).To(Equal("https://custom.httproute.host/oauth2/callback"))
 ```
 
-(Rationale: `GetHost()` splits `custom.httproute.host` on the first `.` → prefix `custom`, domain `httproute`; `GetOidcRedirectURL` wraps it as `https://custom.httproute/oauth2/callback`.)
+(Rationale: `strings.Cut("custom.httproute.host", ".")` returns everything after the FIRST separator — prefix `custom`, domain `httproute.host` — so `GetHost()` rejoins them to `custom.httproute.host` and `GetOidcRedirectURL` wraps it as `https://custom.httproute.host/oauth2/callback`.)
 
 - [ ] **Step 4: Run the configuration unit tests**
 

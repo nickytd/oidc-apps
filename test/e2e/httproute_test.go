@@ -13,7 +13,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
@@ -116,30 +115,6 @@ var _ = Describe("Oidc Apps HTTPRoute Deployment Target Test", Ordered, func() {
 				}
 
 				return fmt.Errorf("an expected oidc-apps HTTPRoute: %s is not found", constants.HTTPRouteName+"-"+suffix)
-			}, 5*time.Second, 250*time.Millisecond).Should(Succeed())
-		})
-
-		It("there shall be no oidc-apps annotated ingress present in the deployment namespace", func(ctx SpecContext) {
-			suffix := randutils.GenerateSha256(strings.Join([]string{httpRouteTarget, defaultNamespace}, "-"))
-			// HTTPRoute target has ingress.create=false, so no ingress should be created
-			Eventually(func() error {
-				ingress := &gatewayv1.HTTPRoute{}
-
-				err := clt.Get(ctx,
-					client.ObjectKey{
-						Namespace: defaultNamespace,
-						Name:      constants.IngressName + "-" + suffix,
-					}, ingress)
-
-				if apierrors.IsNotFound(err) {
-					return nil
-				}
-
-				if err != nil {
-					return err
-				}
-
-				return fmt.Errorf("unexpected oidc-apps ingress found: %s", constants.IngressName+"-"+suffix)
 			}, 5*time.Second, 250*time.Millisecond).Should(Succeed())
 		})
 

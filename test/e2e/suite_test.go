@@ -133,11 +133,10 @@ var _ = BeforeSuite(func() {
 
 	// Register the webhook server
 	server := mgr.GetWebhookServer()
-	server.Register(constants.PodWebHookPath, &webhook.Admission{Handler: &oidcappswebhook.PodMutator{
-		Client:  clt,
-		Decoder: admission.NewDecoder(sch),
-		Config:  extensionConfig,
-	}})
+	server.Register(constants.PodWebHookPath, admission.WithDefaulter(sch, &oidcappswebhook.PodMutator{
+		Client: clt,
+		Config: extensionConfig,
+	}))
 
 	// Set up the deployment reconciler in oidc-apps-controller
 	err = controllerruntime.NewControllerManagedBy(mgr).

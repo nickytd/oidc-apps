@@ -5,18 +5,14 @@ package webhook
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"net/http"
 	"slices"
 	"strings"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/util/json"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	"github.com/nickytd/oidc-apps/pkg/configuration"
@@ -24,65 +20,53 @@ import (
 )
 
 // Register the webhook with the server
-var _ admission.Handler = &PodMutator{}
+var _ admission.Defaulter[*corev1.Pod] = &PodMutator{}
 
 // PodMutator is a handler modifying the resource definitions of the pod targets
 type PodMutator struct {
 	Client          client.Client
-	Decoder         webhook.AdmissionDecoder
 	ImagePullSecret string
 	Config          *configuration.OIDCAppsControllerConfig
 }
 
-// Handle provides interface implementation for the PodMutator
-func (p *PodMutator) Handle(ctx context.Context, req webhook.AdmissionRequest) webhook.AdmissionResponse {
+// Default provides the admission.Defaulter implementation for the PodMutator,
+// injecting the proxy sidecars into target pods in place.
+func (p *PodMutator) Default(ctx context.Context, pod *corev1.Pod) error {
 	_log := log.FromContext(ctx)
 
-	if p.Decoder == nil {
-		return webhook.Errored(http.StatusInternalServerError,
-			errors.New("decoder in the admission handler cannot be nil"))
-	}
-
-	pod := &corev1.Pod{}
-	if err := p.Decoder.Decode(req, pod); err != nil {
-		return webhook.Errored(http.StatusBadRequest, err)
-	}
-
-	// Simply return if it is a delete operation
+	// Simply return if the pod is being deleted
 	if !pod.GetDeletionTimestamp().IsZero() {
-		return webhook.Allowed("delete")
+		return nil
 	}
 
-	// Simply return it the pod is not part of the described targets
-
+	// Simply return if the pod is not part of the described targets
 	target, owner := isTarget(ctx, p.Client, p.Config, pod)
 	if !target {
-		return webhook.Allowed("not a target")
+		return nil
 	}
 
 	_log.Info("handling pod admission request")
 
 	rc := p.Config.Resolve(ctx, owner)
 
-	patch := pod.DeepCopy()
 	clientID := rc.GetClientID()
 	issuerURL := rc.GetOidcIssuerURL()
 	upstream := rc.GetUpstreamTarget()
-	upstreamURL := buildUpstreamURL(upstream, patch.Spec)
+	upstreamURL := buildUpstreamURL(upstream, pod.Spec)
 	suffix := fetchTargetSuffix(owner)
 
 	// Add the OIDC annotation to the deployment template
-	addAnnotations(patch, p.Config, rc)
+	addAnnotations(pod, p.Config, rc)
 
 	// Add required annotations to pod spec template
-	addPodAnnotations(patch,
+	addPodAnnotations(pod,
 		map[string]string{
 			constants.AnnotationHostKey: rc.GetHost(),
 		},
 	)
 
 	// Add required labels to pod spec template
-	addPodLabels(patch,
+	addPodLabels(pod,
 		map[string]string{
 			constants.LabelKey: "pod",
 		},
@@ -92,14 +76,14 @@ func (p *PodMutator) Handle(ctx context.Context, req webhook.AdmissionRequest) w
 	addProjectedSecretSourceVolume(
 		constants.Oauth2VolumeName,
 		constants.SecretNameOauth2Proxy+"-"+suffix,
-		&patch.Spec,
+		&pod.Spec,
 	)
 
 	if shallAddOidcCaSecretName(rc) {
 		addProjectedSecretSourceVolume(
 			constants.Oauth2VolumeName,
 			fetchOidcCASecretName(suffix, rc),
-			&patch.Spec,
+			&pod.Spec,
 		)
 	}
 
@@ -107,7 +91,7 @@ func (p *PodMutator) Handle(ctx context.Context, req webhook.AdmissionRequest) w
 	addProjectedSecretSourceVolume(
 		constants.KubeRbacProxyVolumeName,
 		constants.SecretNameResourceAttributes+"-"+suffix,
-		&patch.Spec,
+		&pod.Spec,
 	)
 
 	// Add an optional kubeconfig secret for the kube-rbac-proxy
@@ -115,7 +99,7 @@ func (p *PodMutator) Handle(ctx context.Context, req webhook.AdmissionRequest) w
 		addProjectedSecretSourceVolume(
 			constants.KubeRbacProxyVolumeName,
 			fetchKubconfigSecretName(suffix, rc),
-			&patch.Spec,
+			&pod.Spec,
 		)
 	}
 
@@ -124,22 +108,22 @@ func (p *PodMutator) Handle(ctx context.Context, req webhook.AdmissionRequest) w
 		addProjectedSecretSourceVolume(
 			constants.KubeRbacProxyVolumeName,
 			fetchOidcCASecretName(suffix, rc),
-			&patch.Spec,
+			&pod.Spec,
 		)
 	}
 
 	// Add the OAUTH2 proxy sidecar to the pod template
-	addProxyContainer(constants.ContainerNameOauth2Proxy, &patch.Spec, getOIDCProxyContainer(_log, &patch.Spec, owner, rc))
+	addProxyContainer(constants.ContainerNameOauth2Proxy, &pod.Spec, getOIDCProxyContainer(_log, &pod.Spec, owner, rc))
 
 	// Add the kube-rbac-proxy sidecar to the pod template
-	addProxyContainer(constants.ContainerNameKubeRbacProxy, &patch.Spec, getKubeRbacProxyContainer(clientID, issuerURL, upstreamURL, patch, rc))
+	addProxyContainer(constants.ContainerNameKubeRbacProxy, &pod.Spec, getKubeRbacProxyContainer(clientID, issuerURL, upstreamURL, pod, rc))
 
 	// Add image pull secret if the proxy container images are served from private registry
 	if len(p.ImagePullSecret) > 0 {
-		addImagePullSecret(p.ImagePullSecret, &patch.Spec)
+		addImagePullSecret(p.ImagePullSecret, &pod.Spec)
 	}
 
-	podIndex, present := patch.GetObjectMeta().GetLabels()["statefulset.kubernetes.io/pod-name"]
+	podIndex, present := pod.GetObjectMeta().GetLabels()["statefulset.kubernetes.io/pod-name"]
 
 	// When "present", the target pod is part of a statefulset.
 	// In this case, the oidc-apps-controller creates a new HTTPRoute for each pod and the oauth2-proxy redirect
@@ -160,18 +144,18 @@ func (p *PodMutator) Handle(ctx context.Context, req webhook.AdmissionRequest) w
 			host = fmt.Sprintf("%s-%s.%s", host, l[len(l)-1], domain)
 		}
 
-		for idx, container := range patch.Spec.Containers {
+		for idx, container := range pod.Spec.Containers {
 			if container.Name != "oauth2-proxy" {
 				continue
 			}
 			// Remove the argument if present
 			for i, arg := range container.Args {
 				if strings.HasPrefix(arg, "--redirect-url") {
-					patch.Spec.Containers[idx].Args = slices.Delete(patch.Spec.Containers[idx].Args, i, i+1)
+					pod.Spec.Containers[idx].Args = slices.Delete(pod.Spec.Containers[idx].Args, i, i+1)
 				}
 			}
 			// Add the correct argument
-			patch.Spec.Containers[idx].Args = append(patch.Spec.Containers[idx].Args,
+			pod.Spec.Containers[idx].Args = append(pod.Spec.Containers[idx].Args,
 				fmt.Sprintf("--redirect-url=https://%s/oauth2/callback", host),
 			)
 
@@ -179,17 +163,7 @@ func (p *PodMutator) Handle(ctx context.Context, req webhook.AdmissionRequest) w
 		}
 	}
 
-	original, err := json.Marshal(pod)
-	if err != nil {
-		_log.Info("Unable to marshal pod")
-	}
-
-	patched, err := json.Marshal(patch)
-	if err != nil {
-		_log.Info("Unable to marshal pod")
-	}
-
-	return admission.PatchResponseFromRaw(original, patched)
+	return nil
 }
 
 func isTarget(ctx context.Context, c client.Client, cfg *configuration.OIDCAppsControllerConfig, pod *corev1.Pod) (bool, client.Object) {

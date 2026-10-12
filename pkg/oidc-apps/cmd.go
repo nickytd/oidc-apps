@@ -18,7 +18,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	autoscalerv1 "k8s.io/autoscaler/vertical-pod-autoscaler/pkg/apis/autoscaling.k8s.io/v1"
 	"k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/client-go/scale/scheme/autoscalingv1"
 	"k8s.io/client-go/util/workqueue"
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
@@ -426,27 +425,25 @@ func addWebhooks(mgr manager.Manager, o *Options) error {
 
 	webhookServer.Register(
 		constants.PodWebHookPath,
-		&webhook.Admission{Handler: &oidcappswebhook.PodMutator{
+		admission.WithDefaulter(scheme.Scheme, &oidcappswebhook.PodMutator{
 			Client:          mgr.GetClient(),
-			Decoder:         admission.NewDecoder(scheme.Scheme),
 			ImagePullSecret: o.registrySecret,
 			Config:          extensionConfig,
-		}},
+		}),
 	)
 
 	if o.enableVpa {
 		s := runtime.NewScheme()
-		if err := autoscalingv1.AddToScheme(s); err != nil {
+		if err := autoscalerv1.AddToScheme(s); err != nil {
 			return err
 		}
 
 		webhookServer.Register(
 			constants.VpaWebHookPath,
-			&webhook.Admission{Handler: &oidcappswebhook.VPAMutator{
-				Client:  mgr.GetClient(),
-				Decoder: admission.NewDecoder(s),
-				Config:  extensionConfig,
-			}},
+			admission.WithDefaulter(s, &oidcappswebhook.VPAMutator{
+				Client: mgr.GetClient(),
+				Config: extensionConfig,
+			}),
 		)
 	}
 

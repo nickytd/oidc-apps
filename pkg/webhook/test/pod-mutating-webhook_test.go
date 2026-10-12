@@ -6,14 +6,11 @@ package test
 import (
 	"context"
 	_ "embed"
-	"encoding/json"
 	"path/filepath"
 	"strings"
 
-	jsonpatch "github.com/evanphx/json-patch/v5"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	adminssionv1 "k8s.io/api/admission/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -21,7 +18,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	"github.com/nickytd/oidc-apps/pkg/configuration"
 	"github.com/nickytd/oidc-apps/pkg/constants"
@@ -56,9 +52,8 @@ var _ = BeforeEach(func() {
 	)
 
 	podWebhook = &webhook.PodMutator{
-		Client:  fakeClient,
-		Decoder: admission.NewDecoder(s),
-		Config:  extCfg,
+		Client: fakeClient,
+		Config: extCfg,
 	}
 })
 
@@ -459,64 +454,22 @@ var _ = Describe("Oidc Apps MutatingAdmission Framework Test", func() {
 	}) // Context
 	Context("when a pod does not belong to a target", func() {
 		It("there shall be no auth & authz proxies in the pod templates spec", func() {
-			raw, err := json.Marshal(nonTargetPod)
+			nonTarget := nonTargetPod.DeepCopy()
+			containers := len(nonTarget.Spec.Containers)
 
+			err := podWebhook.Default(context.Background(), nonTarget)
 			Expect(err).NotTo(HaveOccurred())
 
-			req := admission.Request{
-				AdmissionRequest: adminssionv1.AdmissionRequest{
-					UID:       "uid-request",
-					Kind:      metav1.GroupVersionKind{Group: "", Version: "v1", Kind: "Pod"},
-					Resource:  metav1.GroupVersionResource{Group: "", Version: "v1", Resource: "pods"},
-					Namespace: "default",
-					Operation: adminssionv1.Create,
-					Object: runtime.RawExtension{
-						Raw: raw,
-					},
-				},
-			}
-			resp := podWebhook.Handle(context.Background(), req)
-			_log.Info("response", "response", resp.String())
-			Expect(resp.Allowed).To(BeTrue())
-			Expect(resp.Patches).To(BeNil())
+			// A non-target pod must be left untouched.
+			Expect(nonTarget.Spec.Containers).To(HaveLen(containers))
 		}) // It
 	}) // Context when a pod does not belong to a target
 }) // Describe
 
 func patchPod(pod *corev1.Pod) *corev1.Pod {
-	raw, err := json.Marshal(pod)
+	patchedPod := pod.DeepCopy()
 
-	Expect(err).NotTo(HaveOccurred())
-
-	req := admission.Request{
-		AdmissionRequest: adminssionv1.AdmissionRequest{
-			UID:       "uid-request",
-			Kind:      metav1.GroupVersionKind{Group: "", Version: "v1", Kind: "Pod"},
-			Resource:  metav1.GroupVersionResource{Group: "", Version: "v1", Resource: "pods"},
-			Namespace: "nginx",
-			Operation: adminssionv1.Create,
-			Object: runtime.RawExtension{
-				Raw: raw,
-			},
-		},
-	}
-	resp := podWebhook.Handle(context.Background(), req)
-	_log.Info("response", "response", resp.String())
-	Expect(resp.Allowed).To(BeTrue())
-	Expect(resp.Patches).NotTo(BeNil())
-
-	patchBytes, err := json.Marshal(resp.Patches)
-	Expect(err).NotTo(HaveOccurred())
-	decodedPatch, err := jsonpatch.DecodePatch(patchBytes)
-	Expect(err).NotTo(HaveOccurred())
-
-	// Apply the patch
-	patchPodBytes, err := decodedPatch.Apply(raw)
-	Expect(err).NotTo(HaveOccurred())
-
-	var patchedPod = &corev1.Pod{}
-
-	err = json.Unmarshal(patchPodBytes, &patchedPod)
+	err := podWebhook.Default(context.Background(), patchedPod)
 	Expect(err).NotTo(HaveOccurred())
 
 	return patchedPod

@@ -5,13 +5,10 @@ package test
 
 import (
 	"context"
-	"encoding/json"
 	"path/filepath"
 
-	jsonpatch "github.com/evanphx/json-patch/v5"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	adminssionv1 "k8s.io/api/admission/v1"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -20,7 +17,6 @@ import (
 	autoscalerv1 "k8s.io/autoscaler/vertical-pod-autoscaler/pkg/apis/autoscaling.k8s.io/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	"github.com/nickytd/oidc-apps/pkg/configuration"
 	"github.com/nickytd/oidc-apps/pkg/constants"
@@ -57,9 +53,8 @@ var _ = BeforeEach(func() {
 	)
 
 	vpaWebhook = &webhook.VPAMutator{
-		Client:  fakeClient,
-		Decoder: admission.NewDecoder(s),
-		Config:  extCfg,
+		Client: fakeClient,
+		Config: extCfg,
 	}
 })
 
@@ -141,65 +136,44 @@ var _ = Describe("Oidc Apps MutatingAdmission Framework Test", func() {
 		})
 	})
 
-	Context("when a reconciled target does not belong to a target", func() {
-		It("there shall be no auth & authz policies in the vpa spec", func() {
-			raw, err := json.Marshal(nonTargetVpa)
+	Context("when the reconciled target has a vpa without a resource policy", func() {
+		It("It shall initialize the policy with mode=Off for the proxies", func() {
+			vpa := targetVPA.DeepCopy()
+			vpa.Spec.ResourcePolicy = nil
+
+			err := vpaWebhook.Default(context.Background(), vpa)
 			Expect(err).NotTo(HaveOccurred())
 
-			req := admission.Request{
-				AdmissionRequest: adminssionv1.AdmissionRequest{
-					UID:       "uid-request",
-					Kind:      metav1.GroupVersionKind{Group: "autoscaling.k8s.io", Version: "v1", Kind: "VerticalPodAutoscaler"},
-					Resource:  metav1.GroupVersionResource{Group: "autoscaling.k8s.io", Version: "v1", Resource: "verticalpodautoscalers"},
-					Namespace: "default",
-					Operation: adminssionv1.Update,
-					Object: runtime.RawExtension{
-						Raw: raw,
-					},
-				},
-			}
-			resp := vpaWebhook.Handle(context.Background(), req)
-			_log.Info("response", "response", resp.String())
-			Expect(resp.Allowed).To(BeTrue())
-			Expect(resp.Patches).To(BeNil())
+			Expect(vpa.Spec.ResourcePolicy).NotTo(BeNil())
+			Expect(vpa.Spec.ResourcePolicy.ContainerPolicies).To(ContainElement(autoscalerv1.ContainerResourcePolicy{
+				ContainerName: constants.ContainerNameOauth2Proxy,
+				Mode:          new(autoscalerv1.ContainerScalingModeOff),
+			}))
+			Expect(vpa.Spec.ResourcePolicy.ContainerPolicies).To(ContainElement(autoscalerv1.ContainerResourcePolicy{
+				ContainerName: constants.ContainerNameKubeRbacProxy,
+				Mode:          new(autoscalerv1.ContainerScalingModeOff),
+			}))
+		})
+	})
+
+	Context("when a reconciled target does not belong to a target", func() {
+		It("there shall be no auth & authz policies in the vpa spec", func() {
+			nonTarget := nonTargetVpa.DeepCopy()
+			policies := len(nonTarget.Spec.ResourcePolicy.ContainerPolicies)
+
+			err := vpaWebhook.Default(context.Background(), nonTarget)
+			Expect(err).NotTo(HaveOccurred())
+
+			// A non-target vpa must be left untouched.
+			Expect(nonTarget.Spec.ResourcePolicy.ContainerPolicies).To(HaveLen(policies))
 		}) // It
 	})
 })
 
 func patchVpa(vpa *autoscalerv1.VerticalPodAutoscaler) *autoscalerv1.VerticalPodAutoscaler {
-	raw, err := json.Marshal(vpa)
+	patchedVpa := vpa.DeepCopy()
 
-	Expect(err).NotTo(HaveOccurred())
-
-	req := admission.Request{
-		AdmissionRequest: adminssionv1.AdmissionRequest{
-			UID:       "uid-request",
-			Kind:      metav1.GroupVersionKind{Group: "autoscaling.k8s.io", Version: "v1", Kind: "VerticalPodAutoscaler"},
-			Resource:  metav1.GroupVersionResource{Group: "autoscaling.k8s.io", Version: "v1", Resource: "verticalpodautoscalers"},
-			Namespace: "nginx",
-			Operation: adminssionv1.Update,
-			Object: runtime.RawExtension{
-				Raw: raw,
-			},
-		},
-	}
-	resp := vpaWebhook.Handle(context.Background(), req)
-	_log.Info("response", "response", resp.String())
-	Expect(resp.Allowed).To(BeTrue())
-	Expect(resp.Patches).NotTo(BeNil())
-
-	patchBytes, err := json.Marshal(resp.Patches)
-	Expect(err).NotTo(HaveOccurred())
-	decodedPatch, err := jsonpatch.DecodePatch(patchBytes)
-	Expect(err).NotTo(HaveOccurred())
-
-	// Apply the patch
-	patchVpaBytes, err := decodedPatch.Apply(raw)
-	Expect(err).NotTo(HaveOccurred())
-
-	var patchedVpa = &autoscalerv1.VerticalPodAutoscaler{}
-
-	err = json.Unmarshal(patchVpaBytes, &patchedVpa)
+	err := vpaWebhook.Default(context.Background(), patchedVpa)
 	Expect(err).NotTo(HaveOccurred())
 
 	return patchedVpa

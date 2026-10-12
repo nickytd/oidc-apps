@@ -5,21 +5,17 @@ package test
 
 import (
 	"context"
-	"encoding/json"
 	"path/filepath"
 	"strings"
 
-	jsonpatch "github.com/evanphx/json-patch/v5"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	adminssionv1 "k8s.io/api/admission/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	"github.com/nickytd/oidc-apps/pkg/configuration"
 	"github.com/nickytd/oidc-apps/pkg/constants"
@@ -104,9 +100,8 @@ var _ = Describe("Cookie Secret Deterministic Generation Tests", func() {
 			)
 
 			localPodWebhook1 = &webhook.PodMutator{
-				Client:  fakeClient,
-				Decoder: admission.NewDecoder(s),
-				Config:  extCfg,
+				Client: fakeClient,
+				Config: extCfg,
 			}
 		})
 
@@ -362,9 +357,8 @@ var _ = Describe("Cookie Secret Deterministic Generation Tests", func() {
 			)
 
 			localPodWebhook = &webhook.PodMutator{
-				Client:  fakeClient,
-				Decoder: admission.NewDecoder(s),
-				Config:  extCfg,
+				Client: fakeClient,
+				Config: extCfg,
 			}
 		})
 
@@ -372,7 +366,7 @@ var _ = Describe("Cookie Secret Deterministic Generation Tests", func() {
 			patchedPod1 := patchPodWithWebhook(pod1, localPodWebhook)
 			cookieSecret1 := extractCookieSecret(patchedPod1)
 
-			patchedPod2 := patchPodWithNamespaceAndWebhook(pod2, "production", localPodWebhook)
+			patchedPod2 := patchPodWithWebhook(pod2, localPodWebhook)
 			cookieSecret2 := extractCookieSecret(patchedPod2)
 
 			Expect(cookieSecret1).NotTo(BeEmpty(), "Cookie secret 1 should not be empty")
@@ -406,7 +400,7 @@ var _ = Describe("Cookie Secret Deterministic Generation Tests", func() {
 			patchedPod1 := patchPodWithWebhook(pod1, localPodWebhook)
 			cookieSecret1 := extractCookieSecret(patchedPod1)
 
-			patchedPod2 := patchPodWithNamespaceAndWebhook(pod2, "production", localPodWebhook)
+			patchedPod2 := patchPodWithWebhook(pod2, localPodWebhook)
 			cookieSecret2 := extractCookieSecret(patchedPod2)
 
 			patchedPod3 := patchPodWithWebhook(pod3, localPodWebhook)
@@ -518,9 +512,8 @@ var _ = Describe("Cookie Secret Deterministic Generation Tests", func() {
 			extCfg.SetClient(fakeClient)
 
 			localPodWebhook = &webhook.PodMutator{
-				Client:  fakeClient,
-				Decoder: admission.NewDecoder(s),
-				Config:  extCfg,
+				Client: fakeClient,
+				Config: extCfg,
 			}
 		})
 
@@ -632,9 +625,8 @@ var _ = Describe("Cookie Secret Deterministic Generation Tests", func() {
 			extCfg.SetClient(fakeClient)
 
 			localPodWebhook = &webhook.PodMutator{
-				Client:  fakeClient,
-				Decoder: admission.NewDecoder(s),
-				Config:  extCfg,
+				Client: fakeClient,
+				Config: extCfg,
 			}
 		})
 
@@ -778,9 +770,8 @@ var _ = Describe("Cookie Secret Deterministic Generation Tests", func() {
 			)
 
 			localPodWebhook = &webhook.PodMutator{
-				Client:  fakeClient,
-				Decoder: admission.NewDecoder(s),
-				Config:  extCfg,
+				Client: fakeClient,
+				Config: extCfg,
 			}
 		})
 
@@ -836,11 +827,11 @@ var _ = Describe("Cookie Secret Deterministic Generation Tests", func() {
 			// which would cause a forbidden pod spec change error in Kubernetes
 
 			// Simulate CREATE operation
-			patchedOnCreate := patchPodWithOperationAndWebhook(initialPod, adminssionv1.Create, localPodWebhook)
+			patchedOnCreate := patchPodWithWebhook(initialPod, localPodWebhook)
 			cookieSecretOnCreate := extractCookieSecret(patchedOnCreate)
 
 			// Simulate UPDATE operation (VPA in-place update scenario)
-			patchedOnUpdate := patchPodWithOperationAndWebhook(updatedPod, adminssionv1.Update, localPodWebhook)
+			patchedOnUpdate := patchPodWithWebhook(updatedPod, localPodWebhook)
 			cookieSecretOnUpdate := extractCookieSecret(patchedOnUpdate)
 
 			Expect(cookieSecretOnCreate).To(Equal(cookieSecretOnUpdate),
@@ -961,9 +952,8 @@ var _ = Describe("Cookie Secret Deterministic Generation Tests", func() {
 			extCfg.SetClient(fakeClient)
 
 			localPodWebhook = &webhook.PodMutator{
-				Client:  fakeClient,
-				Decoder: admission.NewDecoder(s),
-				Config:  extCfg,
+				Client: fakeClient,
+				Config: extCfg,
 			}
 		})
 
@@ -1062,58 +1052,9 @@ func extractCookieSecret(pod *corev1.Pod) string {
 
 // Helper function to patch pod with a specific webhook
 func patchPodWithWebhook(pod *corev1.Pod, wh *webhook.PodMutator) *corev1.Pod {
-	return patchPodWithNamespaceOperationAndWebhook(pod, pod.Namespace, adminssionv1.Create, wh)
-}
+	patchedPod := pod.DeepCopy()
 
-// Helper function to patch pod with a specific namespace and webhook
-func patchPodWithNamespaceAndWebhook(pod *corev1.Pod, namespace string, wh *webhook.PodMutator) *corev1.Pod {
-	return patchPodWithNamespaceOperationAndWebhook(pod, namespace, adminssionv1.Create, wh)
-}
-
-// Helper function to patch pod with a specific operation and webhook
-func patchPodWithOperationAndWebhook(pod *corev1.Pod, operation adminssionv1.Operation, wh *webhook.PodMutator) *corev1.Pod {
-	return patchPodWithNamespaceOperationAndWebhook(pod, pod.Namespace, operation, wh)
-}
-
-// Helper function to patch pod with namespace, operation, and webhook
-func patchPodWithNamespaceOperationAndWebhook(pod *corev1.Pod, namespace string, operation adminssionv1.Operation, wh *webhook.PodMutator) *corev1.Pod {
-	raw, err := json.Marshal(pod)
-	Expect(err).NotTo(HaveOccurred())
-
-	req := admission.Request{
-		AdmissionRequest: adminssionv1.AdmissionRequest{
-			UID:       "uid-request",
-			Kind:      metav1.GroupVersionKind{Group: "", Version: "v1", Kind: "Pod"},
-			Resource:  metav1.GroupVersionResource{Group: "", Version: "v1", Resource: "pods"},
-			Namespace: namespace,
-			Operation: operation,
-			Object: runtime.RawExtension{
-				Raw: raw,
-			},
-		},
-	}
-
-	resp := wh.Handle(context.Background(), req)
-	_log.Info("webhook response", "response", resp.String())
-	Expect(resp.Allowed).To(BeTrue())
-
-	// If no patches, return original pod
-	if resp.Patches == nil {
-		return pod
-	}
-
-	patchBytes, err := json.Marshal(resp.Patches)
-	Expect(err).NotTo(HaveOccurred())
-	decodedPatch, err := jsonpatch.DecodePatch(patchBytes)
-	Expect(err).NotTo(HaveOccurred())
-
-	// Apply the patch
-	patchedPodBytes, err := decodedPatch.Apply(raw)
-	Expect(err).NotTo(HaveOccurred())
-
-	var patchedPod = &corev1.Pod{}
-
-	err = json.Unmarshal(patchedPodBytes, &patchedPod)
+	err := wh.Default(context.Background(), patchedPod)
 	Expect(err).NotTo(HaveOccurred())
 
 	return patchedPod

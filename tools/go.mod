@@ -1,6 +1,6 @@
 module github.com/nickytd/oidc-apps/tools
 
-go 1.27.0
+go 1.27.2
 
 tool (
 	github.com/d2lang/d2

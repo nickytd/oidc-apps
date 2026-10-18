@@ -17,6 +17,9 @@ TOOLS_MOD                   := $(TOOLS_DIR)/go.mod
 GO_TOOL                     := go tool -modfile=$(TOOLS_MOD)
 ENVTEST_K8S_VERSION         ?= 1.35.0
 
+IMAGES_DIR                  := $(REPO_ROOT)/images
+D2_THEME                    ?= 200
+
 GCI_OPT                     ?= -s standard -s default -s "prefix($(shell go list -m))" --skip-generated
 
 ifneq ($(strip $(shell git status --porcelain 2>/dev/null)),)
@@ -121,6 +124,13 @@ lint: tidy
 	@$(GO_TOOL) golangci-lint run \
 	 	--config=$(REPO_ROOT)/.golangci.yaml \
 		$(SRC_DIRS)
+
+.PHONY: diagrams
+diagrams:
+	@echo "Rendering diagram SVGs from D2 sources..."
+	@for f in $(IMAGES_DIR)/*.d2; do \
+		$(GO_TOOL) d2 --theme $(D2_THEME) "$$f" "$${f%.d2}.svg"; \
+	done
 
 .PHONY: build
 build: build-oidc-apps build-watcher

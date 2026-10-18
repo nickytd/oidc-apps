@@ -61,7 +61,7 @@ targets:
 > `global.gateway.httpRoutes.enabled` flag and per-target `ingress:` config
 > have been removed; migrate `ingress:` blocks to `httpRoute:`.
 
-![image](images/oidc-apps.png)
+![oidc-apps architecture](images/oidc-apps-d2.svg)
 
 ## Installation
 

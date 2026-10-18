@@ -6,7 +6,7 @@ using [Dex](https://dexidp.io/) as the OIDC identity provider and
 
 ## Architecture
 
-![example.png](../../images/example.png)
+![kind-setup architecture](../../images/example-d2.svg)
 
 The controller injects oauth2-proxy and kube-rbac-proxy sidecars into the Grafana
 pod via mutating webhook. An HTTPRoute is automatically created to route traffic

@@ -72,7 +72,8 @@ func (p *Process) Stop() error {
 			return killErr
 		}
 
-		<-done
+		// Drain the Wait() result after SIGKILL; the error is intentionally ignored.
+		<-done //nolint:errcheck // process is being killed; the Wait() error is irrelevant
 
 		return nil
 	case err := <-done:

@@ -1,0 +1,63 @@
+vars: {
+  d2-config: {
+    layout-engine: elk
+  }
+}
+
+direction: right
+
+browser: Browser {
+  shape: image
+  icon: https://cdn.simpleicons.org/googlechrome
+  style.font-size: 28
+}
+host: Host:443 {
+  style.font-size: 28
+}
+nodeport: Kind NodePort:30443 {
+  style.font-size: 28
+}
+gateway: Envoy Gateway {
+  shape: image
+  icon: https://cdn.simpleicons.org/envoyproxy
+  style.font-size: 28
+}
+
+pod: Grafana Pod {
+  style.border-radius: 16
+  style.font-size: 32
+  direction: down
+
+  oauth: oauth-proxy {
+    label: "oauth-proxy\n(port 8000)"
+    style.stroke-dash: 3
+    style.font-size: 26
+  }
+  rbac: kube-rbac-proxy {
+    label: "kube-rbac-proxy\n(port 8100)"
+    style.stroke-dash: 3
+    style.font-size: 26
+  }
+  grafana: grafana {
+    label: "grafana\n(port 3000)"
+    style.stroke-dash: 3
+    style.font-size: 26
+  }
+}
+
+dex: authenticates via dex {
+  shape: text
+  style.font-size: 26
+}
+sar: authorizes via SubjectAccessReview {
+  shape: text
+  style.font-size: 26
+}
+
+browser -> host: "" {style.stroke-dash: 3}
+host -> nodeport: "" {style.stroke-dash: 3}
+nodeport -> gateway: "" {style.stroke-dash: 3}
+gateway -> pod.oauth: "" {style.stroke-dash: 3}
+
+pod.oauth -> dex: "" {style.stroke-dash: 3}
+pod.rbac -> sar: "" {style.stroke-dash: 3}

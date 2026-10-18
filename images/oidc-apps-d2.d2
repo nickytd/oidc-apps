@@ -1,0 +1,116 @@
+vars: {
+  d2-config: {
+    layout-engine: elk
+  }
+}
+
+direction: right
+
+user: User {
+  shape: person
+}
+
+oidc_app: OpenID Application {
+  style.stroke-dash: 3
+  style.border-radius: 8
+  style.font-size: 38
+
+  dex: DexIdP {
+    shape: image
+    icon: https://raw.githubusercontent.com/cncf/artwork/master/projects/dex/icon/color/dex-icon-color.svg
+  }
+  github: GitHub {
+    shape: image
+    icon: https://cdn.simpleicons.org/github
+  }
+  redirect: |md
+    **Redirect URLs**
+    https://grafana-monitoring.127.0.0.1.nip.io/oauth2/callback
+  | {
+    shape: text
+    style.font-size: 28
+  }
+}
+
+cluster: A K8S Cluster {
+  style.stroke-dash: 3
+  style.border-radius: 8
+  style.font-size: 38
+
+  k8s: "" {
+    shape: image
+    icon: https://raw.githubusercontent.com/cncf/artwork/master/projects/kubernetes/icon/color/kubernetes-icon-color.svg
+  }
+
+  workload: HTTPRoute\nhttps://grafana-monitoring.127.0.0.1.nip.io/oauth2/callback {
+    style.border-radius: 16
+    style.font-size: 30
+
+    oauth2: oauth2-proxy {
+      label: "sidecar\noauth2-proxy"
+      style.stroke-dash: 3
+      style.font-size: 30
+    }
+    rbac: kube-rbac-proxy {
+      label: "sidecar\nkube-rbac-proxy"
+      style.stroke-dash: 3
+      style.font-size: 30
+    }
+    grafana: Grafana {
+      shape: image
+      icon: https://cdn.simpleicons.org/grafana
+      style.stroke-dash: 3
+      style.font-size: 30
+    }
+
+    oauth2 -> rbac: "1. Authenticates User\n& obtains OpenID Token\n(admin@oidc-apps.io)" {
+      style.font-size: 28
+    }
+    rbac -> grafana: "2. Authorization via\nSubjectAccessReview" {
+      style.font-size: 28
+    }
+  }
+}
+
+crb: |yaml
+  apiVersion: rbac.authorization.k8s.io/v1
+  kind: ClusterRoleBinding
+  metadata:
+    name: oidc-apps:system:oidc-apps-operators
+  roleRef:
+    apiGroup: rbac.authorization.k8s.io
+    kind: ClusterRole
+    name: oidc-apps:system:oidc-apps-operators
+  subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: User
+    name: admin@oidc-apps.io
+|
+
+cr: |yaml
+  apiVersion: rbac.authorization.k8s.io/v1
+  kind: ClusterRole
+  metadata:
+    name: oidc-apps:system:oidc-apps-operators
+  rules:
+  - apiGroups: ["authorization.oidc-apps.io"]
+    resources:
+    - oidc-apps/grafana
+    verbs: ["get", "create"]
+|
+
+user -> cluster.workload.oauth2: Requests an OIDC-APP {
+  style.font-size: 28
+}
+cluster.workload.oauth2 -> oidc_app: authenticate {
+  style.stroke-dash: 3
+  style.font-size: 28
+}
+cluster.workload.rbac -> crb: checks binding {
+  style.stroke-dash: 3
+  style.font-size: 28
+}
+crb -> cr: references {
+  style.stroke-dash: 3
+  style.font-size: 28
+}

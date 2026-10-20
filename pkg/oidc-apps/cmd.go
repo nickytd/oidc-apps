@@ -503,7 +503,7 @@ func PodMapFuncForDeployment(mgr manager.Manager) func(ctx context.Context, obj 
 
 				_log.V(9).Info("enqueue deployment", "name", deployment.Name, "namespace", deployment.Namespace)
 
-				return []reconcile.Request{{NamespacedName: types.NamespacedName{Name: deployment.Name, Namespace: deployment.Namespace}}}
+				return []reconcile.Request{{Name: deployment.Name, Namespace: deployment.Namespace}}
 			}
 		}
 
@@ -550,7 +550,7 @@ func ServiceMapFuncForStatefulset(mgr manager.Manager) func(ctx context.Context,
 
 				_log.V(9).Info("enqueue statefulset", "name", statefulset.Name, "namespace", statefulset.Namespace)
 
-				return []reconcile.Request{{NamespacedName: types.NamespacedName{Name: statefulset.Name, Namespace: statefulset.Namespace}}}
+				return []reconcile.Request{{Name: statefulset.Name, Namespace: statefulset.Namespace}}
 			}
 		}
 
@@ -597,7 +597,7 @@ func HTTPRouteMapFuncForStatefulset(mgr manager.Manager) func(ctx context.Contex
 
 				_log.V(9).Info("enqueue statefulset", "name", statefulset.Name, "namespace", statefulset.Namespace)
 
-				return []reconcile.Request{{NamespacedName: types.NamespacedName{Name: statefulset.Name, Namespace: statefulset.Namespace}}}
+				return []reconcile.Request{{Name: statefulset.Name, Namespace: statefulset.Namespace}}
 			}
 		}
 
@@ -635,7 +635,7 @@ func addManagedGateway(mgr manager.Manager) error {
 			}),
 		)).
 		WatchesRawSource(source.Func(func(_ context.Context, q workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
-			q.Add(reconcile.Request{NamespacedName: types.NamespacedName{Name: name, Namespace: namespace}})
+			q.Add(reconcile.Request{Name: name, Namespace: namespace})
 
 			return nil
 		})).

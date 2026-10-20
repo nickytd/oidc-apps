@@ -12,7 +12,6 @@ import (
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	autoscalerv1 "k8s.io/autoscaler/vertical-pod-autoscaler/pkg/apis/autoscaling.k8s.io/v1"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -60,11 +59,9 @@ var _ = BeforeEach(func() {
 
 func initTargetVPA() {
 	targetVPA = &autoscalerv1.VerticalPodAutoscaler{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "nginx-vpa",
-			Namespace: "nginx",
-			Labels:    map[string]string{"app": "nginx"},
-		},
+		Name:      "nginx-vpa",
+		Namespace: "nginx",
+		Labels:    map[string]string{"app": "nginx"},
 		Spec: autoscalerv1.VerticalPodAutoscalerSpec{
 			TargetRef: &autoscalingv1.CrossVersionObjectReference{
 				Kind:       "Deployment",
@@ -91,10 +88,8 @@ func initTargetVPA() {
 
 func initNonTargetVPA() {
 	nonTargetVpa = &autoscalerv1.VerticalPodAutoscaler{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-vpa",
-			Namespace: "default",
-		},
+		Name:      "test-vpa",
+		Namespace: "default",
 		Spec: autoscalerv1.VerticalPodAutoscalerSpec{
 			TargetRef: &autoscalingv1.CrossVersionObjectReference{
 				Kind:       "Deployment",

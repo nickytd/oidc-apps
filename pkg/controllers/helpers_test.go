@@ -15,10 +15,8 @@ func TestFetchStrIndexIfPresent(t *testing.T) {
 	t.Run("Label present", func(t *testing.T) {
 		// Create a fake object with the label
 		obj := &metav1.PartialObjectMetadata{
-			ObjectMeta: metav1.ObjectMeta{
-				Labels: map[string]string{
-					"statefulset.kubernetes.io/pod-name": "nginx-1-2",
-				},
+			Labels: map[string]string{
+				"statefulset.kubernetes.io/pod-name": "nginx-1-2",
 			},
 		}
 
@@ -33,10 +31,8 @@ func TestFetchStrIndexIfPresent(t *testing.T) {
 	t.Run("Label present with double digit index", func(t *testing.T) {
 		// Create a fake object with the label
 		obj := &metav1.PartialObjectMetadata{
-			ObjectMeta: metav1.ObjectMeta{
-				Labels: map[string]string{
-					"statefulset.kubernetes.io/pod-name": "nginx-1-20",
-				},
+			Labels: map[string]string{
+				"statefulset.kubernetes.io/pod-name": "nginx-1-20",
 			},
 		}
 
@@ -51,9 +47,7 @@ func TestFetchStrIndexIfPresent(t *testing.T) {
 	t.Run("Label missing", func(t *testing.T) {
 		// Create a fake object without the label
 		obj := &metav1.PartialObjectMetadata{
-			ObjectMeta: metav1.ObjectMeta{
-				Labels: map[string]string{},
-			},
+			Labels: map[string]string{},
 		}
 
 		// Call the function

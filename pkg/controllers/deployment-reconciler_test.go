@@ -29,7 +29,7 @@ func TestDeploymentReconcile(t *testing.T) {
 		d := &DeploymentReconciler{Client: c}
 
 		_, err := d.Reconcile(context.Background(), reconcile.Request{
-			NamespacedName: types.NamespacedName{Namespace: testTargetNS, Name: "owner"},
+			Namespace: testTargetNS, Name: "owner",
 		})
 		require.NoError(t, err)
 
@@ -48,7 +48,7 @@ func TestDeploymentReconcile(t *testing.T) {
 		d := &DeploymentReconciler{Client: c}
 
 		_, err := d.Reconcile(context.Background(), reconcile.Request{
-			NamespacedName: types.NamespacedName{Namespace: testTargetNS, Name: "owner"},
+			Namespace: testTargetNS, Name: "owner",
 		})
 		require.NoError(t, err)
 
@@ -64,7 +64,7 @@ func TestDeploymentReconcile(t *testing.T) {
 		d := &DeploymentReconciler{Client: c}
 
 		_, err := d.Reconcile(context.Background(), reconcile.Request{
-			NamespacedName: types.NamespacedName{Namespace: testTargetNS, Name: "missing"},
+			Namespace: testTargetNS, Name: "missing",
 		})
 		require.NoError(t, err, "reconciling a non-existent deployment must not error")
 	})

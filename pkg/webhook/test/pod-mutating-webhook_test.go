@@ -59,72 +59,56 @@ var _ = BeforeEach(func() {
 
 func initTargetDeployment() {
 	targetDeployment = &appsv1.Deployment{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "apps/v1",
-			Kind:       "Deployment",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "nginx",
-			Namespace: "nginx",
-			Labels:    map[string]string{"app": "nginx"},
-			UID:       "target-deployment",
-		},
+		APIVersion: "apps/v1",
+		Kind:       "Deployment",
+		Name:       "nginx",
+		Namespace:  "nginx",
+		Labels:     map[string]string{"app": "nginx"},
+		UID:        "target-deployment",
 	}
 	targetReplicaSet = &appsv1.ReplicaSet{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "apps/v1",
-			Kind:       "ReplicaSet",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "nginx-rs-0001",
-			Namespace: "nginx",
-			UID:       "target-replicaset",
-			OwnerReferences: []metav1.OwnerReference{
-				{
-					APIVersion: "apps/v1",
-					Kind:       "Deployment",
-					Name:       "nginx",
-					UID:        "target-deployment",
-				},
+		APIVersion: "apps/v1",
+		Kind:       "ReplicaSet",
+		Name:       "nginx-rs-0001",
+		Namespace:  "nginx",
+		UID:        "target-replicaset",
+		OwnerReferences: []metav1.OwnerReference{
+			{
+				APIVersion: "apps/v1",
+				Kind:       "Deployment",
+				Name:       "nginx",
+				UID:        "target-deployment",
 			},
 		},
 	}
 	targetPod = &corev1.Pod{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "v1",
-			Kind:       "Pod",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "nginx",
-			Namespace: "nginx",
-			UID:       "uid-pod",
-			OwnerReferences: []metav1.OwnerReference{
-				{
-					APIVersion: "apps/v1",
-					Kind:       "ReplicaSet",
-					Name:       "nginx-rs-0001",
-					UID:        "target-replicaset",
-				},
+		APIVersion: "v1",
+		Kind:       "Pod",
+		Name:       "nginx",
+		Namespace:  "nginx",
+		UID:        "uid-pod",
+		OwnerReferences: []metav1.OwnerReference{
+			{
+				APIVersion: "apps/v1",
+				Kind:       "ReplicaSet",
+				Name:       "nginx-rs-0001",
+				UID:        "target-replicaset",
 			},
 		},
 	}
 
 	targetPodWithServiceAccount = &corev1.Pod{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "v1",
-			Kind:       "Pod",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "nginx-with-sa",
-			Namespace: "nginx",
-			UID:       "uid-pod",
-			OwnerReferences: []metav1.OwnerReference{
-				{
-					APIVersion: "apps/v1",
-					Kind:       "ReplicaSet",
-					Name:       "nginx-rs-0001",
-					UID:        "target-replicaset",
-				},
+		APIVersion: "v1",
+		Kind:       "Pod",
+		Name:       "nginx-with-sa",
+		Namespace:  "nginx",
+		UID:        "uid-pod",
+		OwnerReferences: []metav1.OwnerReference{
+			{
+				APIVersion: "apps/v1",
+				Kind:       "ReplicaSet",
+				Name:       "nginx-rs-0001",
+				UID:        "target-replicaset",
 			},
 		},
 		Spec: corev1.PodSpec{
@@ -133,21 +117,17 @@ func initTargetDeployment() {
 	}
 
 	podWithLessResources = &corev1.Pod{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "v1",
-			Kind:       "Pod",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "nginx-with-less-resources",
-			Namespace: "nginx",
-			UID:       "uid-pod",
-			OwnerReferences: []metav1.OwnerReference{
-				{
-					APIVersion: "apps/v1",
-					Kind:       "ReplicaSet",
-					Name:       "nginx-rs-0001",
-					UID:        "target-replicaset",
-				},
+		APIVersion: "v1",
+		Kind:       "Pod",
+		Name:       "nginx-with-less-resources",
+		Namespace:  "nginx",
+		UID:        "uid-pod",
+		OwnerReferences: []metav1.OwnerReference{
+			{
+				APIVersion: "apps/v1",
+				Kind:       "ReplicaSet",
+				Name:       "nginx-rs-0001",
+				UID:        "target-replicaset",
 			},
 		},
 		Spec: corev1.PodSpec{
@@ -169,21 +149,17 @@ func initTargetDeployment() {
 	}
 
 	podWithMoreResources = &corev1.Pod{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "v1",
-			Kind:       "Pod",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "nginx-with-more-resources",
-			Namespace: "nginx",
-			UID:       "uid-pod",
-			OwnerReferences: []metav1.OwnerReference{
-				{
-					APIVersion: "apps/v1",
-					Kind:       "ReplicaSet",
-					Name:       "nginx-rs-0001",
-					UID:        "target-replicaset",
-				},
+		APIVersion: "v1",
+		Kind:       "Pod",
+		Name:       "nginx-with-more-resources",
+		Namespace:  "nginx",
+		UID:        "uid-pod",
+		OwnerReferences: []metav1.OwnerReference{
+			{
+				APIVersion: "apps/v1",
+				Kind:       "ReplicaSet",
+				Name:       "nginx-rs-0001",
+				UID:        "target-replicaset",
 			},
 		},
 		Spec: corev1.PodSpec{
@@ -207,52 +183,40 @@ func initTargetDeployment() {
 
 func initNonTargetDeployment() {
 	nonTargetDeployment = &appsv1.Deployment{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "apps/v1",
-			Kind:       "Deployment",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test",
-			Namespace: "default",
-			UID:       "non-target-deployment",
-		},
+		APIVersion: "apps/v1",
+		Kind:       "Deployment",
+		Name:       "test",
+		Namespace:  "default",
+		UID:        "non-target-deployment",
 	}
 	nonTargetReplicaSet = &appsv1.ReplicaSet{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "apps/v1",
-			Kind:       "ReplicaSet",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-rs-0001",
-			Namespace: "default",
-			UID:       "non-target-replicaset",
-			OwnerReferences: []metav1.OwnerReference{
-				{
-					APIVersion: "apps/v1",
-					Kind:       "Deployment",
-					Name:       "test",
-					UID:        "non-target-deployment",
-				},
+		APIVersion: "apps/v1",
+		Kind:       "ReplicaSet",
+		Name:       "test-rs-0001",
+		Namespace:  "default",
+		UID:        "non-target-replicaset",
+		OwnerReferences: []metav1.OwnerReference{
+			{
+				APIVersion: "apps/v1",
+				Kind:       "Deployment",
+				Name:       "test",
+				UID:        "non-target-deployment",
 			},
 		},
 	}
 
 	nonTargetPod = &corev1.Pod{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "v1",
-			Kind:       "Pod",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test",
-			Namespace: "default",
-			UID:       "uid-pod",
-			OwnerReferences: []metav1.OwnerReference{
-				{
-					APIVersion: "apps/v1",
-					Kind:       "ReplicaSet",
-					Name:       "tesst-rs-0001",
-					UID:        "non-target-replicaset",
-				},
+		APIVersion: "v1",
+		Kind:       "Pod",
+		Name:       "test",
+		Namespace:  "default",
+		UID:        "uid-pod",
+		OwnerReferences: []metav1.OwnerReference{
+			{
+				APIVersion: "apps/v1",
+				Kind:       "ReplicaSet",
+				Name:       "tesst-rs-0001",
+				UID:        "non-target-replicaset",
 			},
 		},
 		Spec: corev1.PodSpec{Containers: []corev1.Container{
@@ -290,25 +254,19 @@ var _ = Describe("Oidc Apps MutatingAdmission Framework Test", func() {
 			Expect(patchedPod.Spec.Volumes).To(ContainElement(
 				corev1.Volume{
 					Name: constants.Oauth2VolumeName,
-					VolumeSource: corev1.VolumeSource{
-						Projected: &corev1.ProjectedVolumeSource{
-							Sources: []corev1.VolumeProjection{
-								{
-									Secret: &corev1.SecretProjection{
-										LocalObjectReference: corev1.LocalObjectReference{
-											Name: "oauth2-proxy-" + randutils.GenerateSha256(targetDeployment.Name+"-"+targetDeployment.Namespace),
-										},
-										Optional: new(false),
-									},
+					Projected: &corev1.ProjectedVolumeSource{
+						Sources: []corev1.VolumeProjection{
+							{
+								Secret: &corev1.SecretProjection{
+									Name:     "oauth2-proxy-" + randutils.GenerateSha256(targetDeployment.Name+"-"+targetDeployment.Namespace),
+									Optional: new(false),
 								},
-								{
-									Secret: &corev1.SecretProjection{
-										LocalObjectReference: corev1.LocalObjectReference{
-											Name: "oidc-ca-" + randutils.GenerateSha256(targetDeployment.
-												Name+"-"+targetDeployment.Namespace),
-										},
-										Optional: new(false),
-									},
+							},
+							{
+								Secret: &corev1.SecretProjection{
+									Name: "oidc-ca-" + randutils.GenerateSha256(targetDeployment.
+										Name+"-"+targetDeployment.Namespace),
+									Optional: new(false),
 								},
 							},
 						},
@@ -318,25 +276,19 @@ var _ = Describe("Oidc Apps MutatingAdmission Framework Test", func() {
 			Expect(patchedPod.Spec.Volumes).To(ContainElement(
 				corev1.Volume{
 					Name: constants.KubeRbacProxyVolumeName,
-					VolumeSource: corev1.VolumeSource{
-						Projected: &corev1.ProjectedVolumeSource{
-							Sources: []corev1.VolumeProjection{
-								{
-									Secret: &corev1.SecretProjection{
-										LocalObjectReference: corev1.LocalObjectReference{
-											Name: "resource-attributes-" + randutils.GenerateSha256(targetDeployment.Name+"-"+targetDeployment.Namespace),
-										},
-										Optional: new(false),
-									},
+					Projected: &corev1.ProjectedVolumeSource{
+						Sources: []corev1.VolumeProjection{
+							{
+								Secret: &corev1.SecretProjection{
+									Name:     "resource-attributes-" + randutils.GenerateSha256(targetDeployment.Name+"-"+targetDeployment.Namespace),
+									Optional: new(false),
 								},
-								{
-									Secret: &corev1.SecretProjection{
-										LocalObjectReference: corev1.LocalObjectReference{
-											Name: "oidc-ca-" + randutils.GenerateSha256(targetDeployment.
-												Name+"-"+targetDeployment.Namespace),
-										},
-										Optional: new(false),
-									},
+							},
+							{
+								Secret: &corev1.SecretProjection{
+									Name: "oidc-ca-" + randutils.GenerateSha256(targetDeployment.
+										Name+"-"+targetDeployment.Namespace),
+									Optional: new(false),
 								},
 							},
 						},
@@ -375,25 +327,19 @@ var _ = Describe("Oidc Apps MutatingAdmission Framework Test", func() {
 				Expect(patchedPod.Spec.Volumes).To(ContainElement(
 					corev1.Volume{
 						Name: constants.KubeRbacProxyVolumeName,
-						VolumeSource: corev1.VolumeSource{
-							Projected: &corev1.ProjectedVolumeSource{
-								Sources: []corev1.VolumeProjection{
-									{
-										Secret: &corev1.SecretProjection{
-											LocalObjectReference: corev1.LocalObjectReference{
-												Name: "resource-attributes-" + randutils.GenerateSha256(targetDeployment.Name+"-"+targetDeployment.Namespace),
-											},
-											Optional: new(false),
-										},
+						Projected: &corev1.ProjectedVolumeSource{
+							Sources: []corev1.VolumeProjection{
+								{
+									Secret: &corev1.SecretProjection{
+										Name:     "resource-attributes-" + randutils.GenerateSha256(targetDeployment.Name+"-"+targetDeployment.Namespace),
+										Optional: new(false),
 									},
-									{
-										Secret: &corev1.SecretProjection{
-											LocalObjectReference: corev1.LocalObjectReference{
-												Name: "oidc-ca-" + randutils.GenerateSha256(targetDeployment.
-													Name+"-"+targetDeployment.Namespace),
-											},
-											Optional: new(false),
-										},
+								},
+								{
+									Secret: &corev1.SecretProjection{
+										Name: "oidc-ca-" + randutils.GenerateSha256(targetDeployment.
+											Name+"-"+targetDeployment.Namespace),
+										Optional: new(false),
 									},
 								},
 							},

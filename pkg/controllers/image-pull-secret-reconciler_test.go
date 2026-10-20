@@ -11,7 +11,6 @@ import (
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -42,10 +41,8 @@ func newFakeClient(t *testing.T, objs ...client.Object) client.Client {
 
 func sourceSecret(data string) *corev1.Secret {
 	return &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      testRegistrySecret,
-			Namespace: testControllerNS,
-		},
+		Name:      testRegistrySecret,
+		Namespace: testControllerNS,
 		Data: map[string][]byte{
 			DOCKERCONFIGJSON: []byte(data),
 		},
@@ -54,13 +51,11 @@ func sourceSecret(data string) *corev1.Secret {
 
 func labeledTarget(name, _ string) *corev1.Secret {
 	return &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: testTargetNS,
-			Labels: map[string]string{
-				constants.LabelKey:       constants.LabelValue,
-				constants.SecretLabelKey: constants.RegistrySecretLabelValue,
-			},
+		Name:      name,
+		Namespace: testTargetNS,
+		Labels: map[string]string{
+			constants.LabelKey:       constants.LabelValue,
+			constants.SecretLabelKey: constants.RegistrySecretLabelValue,
 		},
 		Data: map[string][]byte{
 			DOCKERCONFIGJSON: []byte("stale"),
@@ -77,7 +72,7 @@ func TestImagePullSecretReconcile(t *testing.T) {
 		r := &ImagePullSecretReconciler{Client: c, SecretName: testRegistrySecret}
 
 		_, err := r.Reconcile(context.Background(), reconcile.Request{
-			NamespacedName: types.NamespacedName{Namespace: testControllerNS, Name: testRegistrySecret},
+			Namespace: testControllerNS, Name: testRegistrySecret,
 		})
 		require.NoError(t, err)
 
@@ -102,7 +97,7 @@ func TestImagePullSecretReconcile(t *testing.T) {
 		r := &ImagePullSecretReconciler{Client: c, SecretName: testRegistrySecret}
 
 		_, err := r.Reconcile(context.Background(), reconcile.Request{
-			NamespacedName: types.NamespacedName{Namespace: testControllerNS, Name: "some-other-secret"},
+			Namespace: testControllerNS, Name: "some-other-secret",
 		})
 		require.NoError(t, err)
 
@@ -120,7 +115,7 @@ func TestImagePullSecretReconcile(t *testing.T) {
 		r := &ImagePullSecretReconciler{Client: c, SecretName: testRegistrySecret}
 
 		_, err := r.Reconcile(context.Background(), reconcile.Request{
-			NamespacedName: types.NamespacedName{Namespace: testControllerNS, Name: testRegistrySecret},
+			Namespace: testControllerNS, Name: testRegistrySecret,
 		})
 		require.NoError(t, err)
 	})
@@ -132,7 +127,7 @@ func TestImagePullSecretReconcile(t *testing.T) {
 		r := &ImagePullSecretReconciler{Client: c, SecretName: testRegistrySecret}
 
 		_, err := r.Reconcile(context.Background(), reconcile.Request{
-			NamespacedName: types.NamespacedName{Namespace: testControllerNS, Name: testRegistrySecret},
+			Namespace: testControllerNS, Name: testRegistrySecret,
 		})
 		require.NoError(t, err)
 
@@ -155,7 +150,7 @@ func TestImagePullSecretReconcile(t *testing.T) {
 		r := &ImagePullSecretReconciler{Client: c, SecretName: testRegistrySecret}
 
 		_, err := r.Reconcile(context.Background(), reconcile.Request{
-			NamespacedName: types.NamespacedName{Namespace: testControllerNS, Name: testRegistrySecret},
+			Namespace: testControllerNS, Name: testRegistrySecret,
 		})
 		require.NoError(t, err)
 
@@ -185,7 +180,7 @@ func TestImagePullSecretReconcile(t *testing.T) {
 		r := &ImagePullSecretReconciler{Client: c, SecretName: testRegistrySecret}
 
 		_, err := r.Reconcile(context.Background(), reconcile.Request{
-			NamespacedName: types.NamespacedName{Namespace: testControllerNS, Name: testRegistrySecret},
+			Namespace: testControllerNS, Name: testRegistrySecret,
 		})
 		require.NoError(t, err)
 

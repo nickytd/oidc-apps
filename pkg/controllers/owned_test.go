@@ -25,23 +25,19 @@ import (
 
 func ownerDeployment(uid string) *appsv1.Deployment {
 	return &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "owner",
-			Namespace: testTargetNS,
-			UID:       types.UID(uid),
-		},
+		Name:      "owner",
+		Namespace: testTargetNS,
+		UID:       types.UID(uid),
 	}
 }
 
 func ownedSecret(name, ownerUID string) *corev1.Secret {
 	s := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: testTargetNS,
-			Labels: map[string]string{
-				constants.LabelKey:       constants.LabelValue,
-				constants.SecretLabelKey: constants.Oauth2LabelValue,
-			},
+		Name:      name,
+		Namespace: testTargetNS,
+		Labels: map[string]string{
+			constants.LabelKey:       constants.LabelValue,
+			constants.SecretLabelKey: constants.Oauth2LabelValue,
 		},
 	}
 	if ownerUID != "" {
@@ -58,17 +54,15 @@ func ownedSecret(name, ownerUID string) *corev1.Secret {
 
 func ownedService(name, ownerUID string) *corev1.Service {
 	return &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: testTargetNS,
-			Labels:    map[string]string{constants.LabelKey: constants.LabelValue},
-			OwnerReferences: []metav1.OwnerReference{{
-				APIVersion: "apps/v1",
-				Kind:       "Deployment",
-				Name:       "owner",
-				UID:        types.UID(ownerUID),
-			}},
-		},
+		Name:      name,
+		Namespace: testTargetNS,
+		Labels:    map[string]string{constants.LabelKey: constants.LabelValue},
+		OwnerReferences: []metav1.OwnerReference{{
+			APIVersion: "apps/v1",
+			Kind:       "Deployment",
+			Name:       "owner",
+			UID:        types.UID(ownerUID),
+		}},
 	}
 }
 

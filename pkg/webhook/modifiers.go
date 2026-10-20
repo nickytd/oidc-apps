@@ -155,9 +155,7 @@ func addProjectedSecretSourceVolume(volumeName, secretName string, podSpec *core
 
 	// Construct the secretProjection
 	secret := &corev1.SecretProjection{
-		LocalObjectReference: corev1.LocalObjectReference{
-			Name: secretName,
-		},
+		Name: secretName,
 		// Items:    nil,
 		Optional: new(false),
 	}

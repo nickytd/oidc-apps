@@ -108,10 +108,8 @@ func TestGetKubeConfigStrTargetOverridesGlobal(t *testing.T) {
 		Targets: []Target{
 			{
 				Name: "target-with-override",
-				Global: Global{
-					KubeRbacProxy: &KubeRbacProxyConfig{
-						KubeConfigStr: "target-kubeconfig",
-					},
+				KubeRbacProxy: &KubeRbacProxyConfig{
+					KubeConfigStr: "target-kubeconfig",
 				},
 				LabelSelector: &metav1.LabelSelector{
 					MatchLabels: map[string]string{"app.kubernetes.io/name": "target-with-override"},
@@ -166,10 +164,8 @@ func TestGetKubeSecretNameTargetOverridesGlobal(t *testing.T) {
 		Targets: []Target{
 			{
 				Name: "target-with-secret",
-				Global: Global{
-					KubeRbacProxy: &KubeRbacProxyConfig{
-						KubeSecretRef: &corev1.SecretReference{Name: "target-secret"},
-					},
+				KubeRbacProxy: &KubeRbacProxyConfig{
+					KubeSecretRef: &corev1.SecretReference{Name: "target-secret"},
 				},
 				LabelSelector: &metav1.LabelSelector{
 					MatchLabels: map[string]string{"app.kubernetes.io/name": "target-with-secret"},

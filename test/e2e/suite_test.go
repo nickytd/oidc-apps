@@ -19,7 +19,6 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	autoscalerv1 "k8s.io/autoscaler/vertical-pod-autoscaler/pkg/apis/autoscaling.k8s.io/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
@@ -229,7 +228,7 @@ var _ = BeforeSuite(func() {
 				}),
 			)).
 			WatchesRawSource(source.Func(func(_ context.Context, q workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
-				q.Add(reconcile.Request{NamespacedName: types.NamespacedName{Name: name, Namespace: namespace}})
+				q.Add(reconcile.Request{Name: name, Namespace: namespace})
 
 				return nil
 			})).

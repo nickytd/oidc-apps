@@ -11,7 +11,6 @@ import (
 	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -84,10 +83,8 @@ func (g *GatewayReconciler) reconcileGateway(ctx context.Context, conf *configur
 	}
 
 	gw := &gatewayv1.Gateway{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: g.Namespace,
-		},
+		Name:      name,
+		Namespace: g.Namespace,
 	}
 
 	result, err := controllerutil.CreateOrUpdate(ctx, g.Client, gw, func() error {

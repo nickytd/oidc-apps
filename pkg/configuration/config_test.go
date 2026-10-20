@@ -11,7 +11,6 @@ import (
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/yaml"
 )
@@ -331,30 +330,24 @@ func TestHTTPRouteWithEmptyParentRefs(t *testing.T) {
 
 func getDeployment(name string) *appsv1.Deployment {
 	return &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: "test",
-			Labels:    map[string]string{"app.kubernetes.io/name": name},
-		},
+		Name:      name,
+		Namespace: "test",
+		Labels:    map[string]string{"app.kubernetes.io/name": name},
 	}
 }
 
 func getNginxDeployment() *appsv1.Deployment {
 	return &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "nginx",
-			Namespace: "default",
-			Labels:    map[string]string{"app.kubernetes.io/name": "nginx"},
-		},
+		Name:      "nginx",
+		Namespace: "default",
+		Labels:    map[string]string{"app.kubernetes.io/name": "nginx"},
 	}
 }
 
 func getTestNamespace() *corev1.Namespace {
 	return &corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:   "test",
-			Labels: map[string]string{"kubernetes.io/metadata.name": "test"},
-		},
+		Name:   "test",
+		Labels: map[string]string{"kubernetes.io/metadata.name": "test"},
 	}
 }
 

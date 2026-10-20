@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 
@@ -22,10 +21,8 @@ func httpRouteForDeploymentObject(object client.Object) *gatewayv1.HTTPRoute {
 	suffix := randutils.GenerateSha256(object.GetName() + "-" + object.GetNamespace())
 
 	return &gatewayv1.HTTPRoute{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      constants.HTTPRouteName + "-" + suffix,
-			Namespace: object.GetNamespace(),
-		},
+		Name:      constants.HTTPRouteName + "-" + suffix,
+		Namespace: object.GetNamespace(),
 	}
 }
 
@@ -38,10 +35,8 @@ func mutateHTTPRouteForDeployment(httpRoute *gatewayv1.HTTPRoute, object client.
 		constants.LabelKey: constants.LabelValue,
 	}
 	httpRoute.Spec = gatewayv1.HTTPRouteSpec{
-		CommonRouteSpec: gatewayv1.CommonRouteSpec{
-			ParentRefs: convertParentRefs(parentRefs, object.GetNamespace()),
-		},
-		Hostnames: []gatewayv1.Hostname{gatewayv1.Hostname(host)},
+		ParentRefs: convertParentRefs(parentRefs, object.GetNamespace()),
+		Hostnames:  []gatewayv1.Hostname{gatewayv1.Hostname(host)},
 		Rules: []gatewayv1.HTTPRouteRule{
 			{
 				Matches: []gatewayv1.HTTPRouteMatch{
@@ -54,12 +49,8 @@ func mutateHTTPRouteForDeployment(httpRoute *gatewayv1.HTTPRoute, object client.
 				},
 				BackendRefs: []gatewayv1.HTTPBackendRef{
 					{
-						BackendRef: gatewayv1.BackendRef{
-							BackendObjectReference: gatewayv1.BackendObjectReference{
-								Name: gatewayv1.ObjectName(constants.ServiceNameOauth2Service + "-" + suffix),
-								Port: new(gatewayv1.PortNumber(8080)),
-							},
-						},
+						Name: gatewayv1.ObjectName(constants.ServiceNameOauth2Service + "-" + suffix),
+						Port: new(gatewayv1.PortNumber(8080)),
 					},
 				},
 			},
@@ -83,10 +74,8 @@ func httpRouteForStatefulSetPodObject(pod *corev1.Pod, object client.Object) *ga
 	index := fetchStrIndexIfPresent(pod)
 
 	return &gatewayv1.HTTPRoute{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      constants.HTTPRouteName + "-" + addOptionalIndex(index+"-") + suffix,
-			Namespace: object.GetNamespace(),
-		},
+		Name:      constants.HTTPRouteName + "-" + addOptionalIndex(index+"-") + suffix,
+		Namespace: object.GetNamespace(),
 	}
 }
 
@@ -107,10 +96,8 @@ func mutateHTTPRouteForStatefulSetPod(httpRoute *gatewayv1.HTTPRoute, pod *corev
 		constants.LabelKey: constants.LabelValue,
 	}
 	httpRoute.Spec = gatewayv1.HTTPRouteSpec{
-		CommonRouteSpec: gatewayv1.CommonRouteSpec{
-			ParentRefs: convertParentRefs(parentRefs, pod.GetNamespace()),
-		},
-		Hostnames: []gatewayv1.Hostname{gatewayv1.Hostname(podHost)},
+		ParentRefs: convertParentRefs(parentRefs, pod.GetNamespace()),
+		Hostnames:  []gatewayv1.Hostname{gatewayv1.Hostname(podHost)},
 		Rules: []gatewayv1.HTTPRouteRule{
 			{
 				Matches: []gatewayv1.HTTPRouteMatch{
@@ -123,12 +110,8 @@ func mutateHTTPRouteForStatefulSetPod(httpRoute *gatewayv1.HTTPRoute, pod *corev
 				},
 				BackendRefs: []gatewayv1.HTTPBackendRef{
 					{
-						BackendRef: gatewayv1.BackendRef{
-							BackendObjectReference: gatewayv1.BackendObjectReference{
-								Name: gatewayv1.ObjectName(constants.ServiceNameOauth2Service + "-" + addOptionalIndex(index+"-") + suffix),
-								Port: new(gatewayv1.PortNumber(8080)),
-							},
-						},
+						Name: gatewayv1.ObjectName(constants.ServiceNameOauth2Service + "-" + addOptionalIndex(index+"-") + suffix),
+						Port: new(gatewayv1.PortNumber(8080)),
 					},
 				},
 			},

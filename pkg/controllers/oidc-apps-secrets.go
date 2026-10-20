@@ -8,7 +8,6 @@ import (
 	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientcmdv1 "k8s.io/client-go/tools/clientcmd/api/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
@@ -22,10 +21,8 @@ func oauth2SecretObject(object client.Object) *corev1.Secret {
 	suffix := randutils.GenerateSha256(object.GetName() + "-" + object.GetNamespace())
 
 	return &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      constants.SecretNameOauth2Proxy + "-" + suffix,
-			Namespace: object.GetNamespace(),
-		},
+		Name:      constants.SecretNameOauth2Proxy + "-" + suffix,
+		Namespace: object.GetNamespace(),
 	}
 }
 
@@ -73,10 +70,8 @@ func resourceAttributesSecretObject(object client.Object) *corev1.Secret {
 	suffix := randutils.GenerateSha256(object.GetName() + "-" + object.GetNamespace())
 
 	return &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      constants.SecretNameResourceAttributes + "-" + suffix,
-			Namespace: object.GetNamespace(),
-		},
+		Name:      constants.SecretNameResourceAttributes + "-" + suffix,
+		Namespace: object.GetNamespace(),
 	}
 }
 
@@ -99,10 +94,8 @@ func kubeconfigSecretObject(object client.Object) *corev1.Secret {
 	suffix := randutils.GenerateSha256(object.GetName() + "-" + object.GetNamespace())
 
 	return &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      constants.SecretNameKubeconfig + "-" + suffix,
-			Namespace: object.GetNamespace(),
-		},
+		Name:      constants.SecretNameKubeconfig + "-" + suffix,
+		Namespace: object.GetNamespace(),
 	}
 }
 
@@ -134,10 +127,8 @@ func oidcCaBundleSecretObject(object client.Object) *corev1.Secret {
 	suffix := randutils.GenerateSha256(object.GetName() + "-" + object.GetNamespace())
 
 	return &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      constants.SecretNameOidcCa + "-" + suffix,
-			Namespace: object.GetNamespace(),
-		},
+		Name:      constants.SecretNameOidcCa + "-" + suffix,
+		Namespace: object.GetNamespace(),
 	}
 }
 

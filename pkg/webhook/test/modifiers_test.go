@@ -34,52 +34,40 @@ var _ = Describe("Cookie Secret Deterministic Generation Tests", func() {
 
 		BeforeEach(func() {
 			deployment1 = &appsv1.Deployment{
-				TypeMeta: metav1.TypeMeta{
-					APIVersion: "apps/v1",
-					Kind:       "Deployment",
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "nginx",
-					Namespace: "nginx",
-					Labels:    map[string]string{"app": "nginx"},
-					UID:       "deployment-uid-1",
-				},
+				APIVersion: "apps/v1",
+				Kind:       "Deployment",
+				Name:       "nginx",
+				Namespace:  "nginx",
+				Labels:     map[string]string{"app": "nginx"},
+				UID:        "deployment-uid-1",
 			}
 			replicaSet1 = &appsv1.ReplicaSet{
-				TypeMeta: metav1.TypeMeta{
-					APIVersion: "apps/v1",
-					Kind:       "ReplicaSet",
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "nginx-rs-0001",
-					Namespace: "nginx",
-					UID:       "replicaset-uid-1",
-					OwnerReferences: []metav1.OwnerReference{
-						{
-							APIVersion: "apps/v1",
-							Kind:       "Deployment",
-							Name:       "nginx",
-							UID:        "deployment-uid-1",
-						},
+				APIVersion: "apps/v1",
+				Kind:       "ReplicaSet",
+				Name:       "nginx-rs-0001",
+				Namespace:  "nginx",
+				UID:        "replicaset-uid-1",
+				OwnerReferences: []metav1.OwnerReference{
+					{
+						APIVersion: "apps/v1",
+						Kind:       "Deployment",
+						Name:       "nginx",
+						UID:        "deployment-uid-1",
 					},
 				},
 			}
 			pod1 = &corev1.Pod{
-				TypeMeta: metav1.TypeMeta{
-					APIVersion: "v1",
-					Kind:       "Pod",
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "nginx-pod-1",
-					Namespace: "nginx",
-					UID:       "pod-uid-1",
-					OwnerReferences: []metav1.OwnerReference{
-						{
-							APIVersion: "apps/v1",
-							Kind:       "ReplicaSet",
-							Name:       "nginx-rs-0001",
-							UID:        "replicaset-uid-1",
-						},
+				APIVersion: "v1",
+				Kind:       "Pod",
+				Name:       "nginx-pod-1",
+				Namespace:  "nginx",
+				UID:        "pod-uid-1",
+				OwnerReferences: []metav1.OwnerReference{
+					{
+						APIVersion: "apps/v1",
+						Kind:       "ReplicaSet",
+						Name:       "nginx-rs-0001",
+						UID:        "replicaset-uid-1",
 					},
 				},
 			}
@@ -185,156 +173,120 @@ var _ = Describe("Cookie Secret Deterministic Generation Tests", func() {
 		BeforeEach(func() {
 			// First owner: nginx in nginx namespace
 			deployment1 = &appsv1.Deployment{
-				TypeMeta: metav1.TypeMeta{
-					APIVersion: "apps/v1",
-					Kind:       "Deployment",
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "nginx",
-					Namespace: "nginx",
-					Labels:    map[string]string{"app": "nginx"},
-					UID:       "deployment-uid-1",
-				},
+				APIVersion: "apps/v1",
+				Kind:       "Deployment",
+				Name:       "nginx",
+				Namespace:  "nginx",
+				Labels:     map[string]string{"app": "nginx"},
+				UID:        "deployment-uid-1",
 			}
 			replicaSet1 = &appsv1.ReplicaSet{
-				TypeMeta: metav1.TypeMeta{
-					APIVersion: "apps/v1",
-					Kind:       "ReplicaSet",
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "nginx-rs-0001",
-					Namespace: "nginx",
-					UID:       "replicaset-uid-1",
-					OwnerReferences: []metav1.OwnerReference{
-						{
-							APIVersion: "apps/v1",
-							Kind:       "Deployment",
-							Name:       "nginx",
-							UID:        "deployment-uid-1",
-						},
+				APIVersion: "apps/v1",
+				Kind:       "ReplicaSet",
+				Name:       "nginx-rs-0001",
+				Namespace:  "nginx",
+				UID:        "replicaset-uid-1",
+				OwnerReferences: []metav1.OwnerReference{
+					{
+						APIVersion: "apps/v1",
+						Kind:       "Deployment",
+						Name:       "nginx",
+						UID:        "deployment-uid-1",
 					},
 				},
 			}
 			pod1 = &corev1.Pod{
-				TypeMeta: metav1.TypeMeta{
-					APIVersion: "v1",
-					Kind:       "Pod",
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "nginx-pod-1",
-					Namespace: "nginx",
-					UID:       "pod-uid-1",
-					OwnerReferences: []metav1.OwnerReference{
-						{
-							APIVersion: "apps/v1",
-							Kind:       "ReplicaSet",
-							Name:       "nginx-rs-0001",
-							UID:        "replicaset-uid-1",
-						},
+				APIVersion: "v1",
+				Kind:       "Pod",
+				Name:       "nginx-pod-1",
+				Namespace:  "nginx",
+				UID:        "pod-uid-1",
+				OwnerReferences: []metav1.OwnerReference{
+					{
+						APIVersion: "apps/v1",
+						Kind:       "ReplicaSet",
+						Name:       "nginx-rs-0001",
+						UID:        "replicaset-uid-1",
 					},
 				},
 			}
 
 			// Second owner: nginx in a different namespace (production)
 			deployment2 = &appsv1.Deployment{
-				TypeMeta: metav1.TypeMeta{
-					APIVersion: "apps/v1",
-					Kind:       "Deployment",
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "nginx",
-					Namespace: "production",
-					Labels:    map[string]string{"app": "nginx"},
-					UID:       "deployment-uid-2",
-				},
+				APIVersion: "apps/v1",
+				Kind:       "Deployment",
+				Name:       "nginx",
+				Namespace:  "production",
+				Labels:     map[string]string{"app": "nginx"},
+				UID:        "deployment-uid-2",
 			}
 			replicaSet2 = &appsv1.ReplicaSet{
-				TypeMeta: metav1.TypeMeta{
-					APIVersion: "apps/v1",
-					Kind:       "ReplicaSet",
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "nginx-rs-0001",
-					Namespace: "production",
-					UID:       "replicaset-uid-2",
-					OwnerReferences: []metav1.OwnerReference{
-						{
-							APIVersion: "apps/v1",
-							Kind:       "Deployment",
-							Name:       "nginx",
-							UID:        "deployment-uid-2",
-						},
+				APIVersion: "apps/v1",
+				Kind:       "ReplicaSet",
+				Name:       "nginx-rs-0001",
+				Namespace:  "production",
+				UID:        "replicaset-uid-2",
+				OwnerReferences: []metav1.OwnerReference{
+					{
+						APIVersion: "apps/v1",
+						Kind:       "Deployment",
+						Name:       "nginx",
+						UID:        "deployment-uid-2",
 					},
 				},
 			}
 			pod2 = &corev1.Pod{
-				TypeMeta: metav1.TypeMeta{
-					APIVersion: "v1",
-					Kind:       "Pod",
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "nginx-pod-2",
-					Namespace: "production",
-					UID:       "pod-uid-2",
-					OwnerReferences: []metav1.OwnerReference{
-						{
-							APIVersion: "apps/v1",
-							Kind:       "ReplicaSet",
-							Name:       "nginx-rs-0001",
-							UID:        "replicaset-uid-2",
-						},
+				APIVersion: "v1",
+				Kind:       "Pod",
+				Name:       "nginx-pod-2",
+				Namespace:  "production",
+				UID:        "pod-uid-2",
+				OwnerReferences: []metav1.OwnerReference{
+					{
+						APIVersion: "apps/v1",
+						Kind:       "ReplicaSet",
+						Name:       "nginx-rs-0001",
+						UID:        "replicaset-uid-2",
 					},
 				},
 			}
 
 			// Third owner: different name in nginx namespace
 			deployment3 = &appsv1.Deployment{
-				TypeMeta: metav1.TypeMeta{
-					APIVersion: "apps/v1",
-					Kind:       "Deployment",
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "apache",
-					Namespace: "nginx",
-					Labels:    map[string]string{"app": "nginx"},
-					UID:       "deployment-uid-3",
-				},
+				APIVersion: "apps/v1",
+				Kind:       "Deployment",
+				Name:       "apache",
+				Namespace:  "nginx",
+				Labels:     map[string]string{"app": "nginx"},
+				UID:        "deployment-uid-3",
 			}
 			replicaSet3 = &appsv1.ReplicaSet{
-				TypeMeta: metav1.TypeMeta{
-					APIVersion: "apps/v1",
-					Kind:       "ReplicaSet",
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "apache-rs-0001",
-					Namespace: "nginx",
-					UID:       "replicaset-uid-3",
-					OwnerReferences: []metav1.OwnerReference{
-						{
-							APIVersion: "apps/v1",
-							Kind:       "Deployment",
-							Name:       "apache",
-							UID:        "deployment-uid-3",
-						},
+				APIVersion: "apps/v1",
+				Kind:       "ReplicaSet",
+				Name:       "apache-rs-0001",
+				Namespace:  "nginx",
+				UID:        "replicaset-uid-3",
+				OwnerReferences: []metav1.OwnerReference{
+					{
+						APIVersion: "apps/v1",
+						Kind:       "Deployment",
+						Name:       "apache",
+						UID:        "deployment-uid-3",
 					},
 				},
 			}
 			pod3 = &corev1.Pod{
-				TypeMeta: metav1.TypeMeta{
-					APIVersion: "v1",
-					Kind:       "Pod",
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "apache-pod-1",
-					Namespace: "nginx",
-					UID:       "pod-uid-3",
-					OwnerReferences: []metav1.OwnerReference{
-						{
-							APIVersion: "apps/v1",
-							Kind:       "ReplicaSet",
-							Name:       "apache-rs-0001",
-							UID:        "replicaset-uid-3",
-						},
+				APIVersion: "v1",
+				Kind:       "Pod",
+				Name:       "apache-pod-1",
+				Namespace:  "nginx",
+				UID:        "pod-uid-3",
+				OwnerReferences: []metav1.OwnerReference{
+					{
+						APIVersion: "apps/v1",
+						Kind:       "ReplicaSet",
+						Name:       "apache-rs-0001",
+						UID:        "replicaset-uid-3",
 					},
 				},
 			}
@@ -428,52 +380,40 @@ var _ = Describe("Cookie Secret Deterministic Generation Tests", func() {
 
 		BeforeEach(func() {
 			deployment = &appsv1.Deployment{
-				TypeMeta: metav1.TypeMeta{
-					APIVersion: "apps/v1",
-					Kind:       "Deployment",
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "nginx",
-					Namespace: "nginx",
-					Labels:    map[string]string{"app": "nginx"},
-					UID:       "deployment-uid-httproute",
-				},
+				APIVersion: "apps/v1",
+				Kind:       "Deployment",
+				Name:       "nginx",
+				Namespace:  "nginx",
+				Labels:     map[string]string{"app": "nginx"},
+				UID:        "deployment-uid-httproute",
 			}
 			replicaSet = &appsv1.ReplicaSet{
-				TypeMeta: metav1.TypeMeta{
-					APIVersion: "apps/v1",
-					Kind:       "ReplicaSet",
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "nginx-rs-0001",
-					Namespace: "nginx",
-					UID:       "replicaset-uid-httproute",
-					OwnerReferences: []metav1.OwnerReference{
-						{
-							APIVersion: "apps/v1",
-							Kind:       "Deployment",
-							Name:       "nginx",
-							UID:        "deployment-uid-httproute",
-						},
+				APIVersion: "apps/v1",
+				Kind:       "ReplicaSet",
+				Name:       "nginx-rs-0001",
+				Namespace:  "nginx",
+				UID:        "replicaset-uid-httproute",
+				OwnerReferences: []metav1.OwnerReference{
+					{
+						APIVersion: "apps/v1",
+						Kind:       "Deployment",
+						Name:       "nginx",
+						UID:        "deployment-uid-httproute",
 					},
 				},
 			}
 			pod = &corev1.Pod{
-				TypeMeta: metav1.TypeMeta{
-					APIVersion: "v1",
-					Kind:       "Pod",
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "nginx-pod-1",
-					Namespace: "nginx",
-					UID:       "pod-uid-httproute",
-					OwnerReferences: []metav1.OwnerReference{
-						{
-							APIVersion: "apps/v1",
-							Kind:       "ReplicaSet",
-							Name:       "nginx-rs-0001",
-							UID:        "replicaset-uid-httproute",
-						},
+				APIVersion: "v1",
+				Kind:       "Pod",
+				Name:       "nginx-pod-1",
+				Namespace:  "nginx",
+				UID:        "pod-uid-httproute",
+				OwnerReferences: []metav1.OwnerReference{
+					{
+						APIVersion: "apps/v1",
+						Kind:       "ReplicaSet",
+						Name:       "nginx-rs-0001",
+						UID:        "replicaset-uid-httproute",
 					},
 				},
 			}
@@ -539,52 +479,40 @@ var _ = Describe("Cookie Secret Deterministic Generation Tests", func() {
 
 		BeforeEach(func() {
 			deployment = &appsv1.Deployment{
-				TypeMeta: metav1.TypeMeta{
-					APIVersion: "apps/v1",
-					Kind:       "Deployment",
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "nginx",
-					Namespace: "nginx",
-					Labels:    map[string]string{"app": "nginx"},
-					UID:       "deployment-uid-extraargs",
-				},
+				APIVersion: "apps/v1",
+				Kind:       "Deployment",
+				Name:       "nginx",
+				Namespace:  "nginx",
+				Labels:     map[string]string{"app": "nginx"},
+				UID:        "deployment-uid-extraargs",
 			}
 			replicaSet = &appsv1.ReplicaSet{
-				TypeMeta: metav1.TypeMeta{
-					APIVersion: "apps/v1",
-					Kind:       "ReplicaSet",
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "nginx-rs-0001",
-					Namespace: "nginx",
-					UID:       "replicaset-uid-extraargs",
-					OwnerReferences: []metav1.OwnerReference{
-						{
-							APIVersion: "apps/v1",
-							Kind:       "Deployment",
-							Name:       "nginx",
-							UID:        "deployment-uid-extraargs",
-						},
+				APIVersion: "apps/v1",
+				Kind:       "ReplicaSet",
+				Name:       "nginx-rs-0001",
+				Namespace:  "nginx",
+				UID:        "replicaset-uid-extraargs",
+				OwnerReferences: []metav1.OwnerReference{
+					{
+						APIVersion: "apps/v1",
+						Kind:       "Deployment",
+						Name:       "nginx",
+						UID:        "deployment-uid-extraargs",
 					},
 				},
 			}
 			pod = &corev1.Pod{
-				TypeMeta: metav1.TypeMeta{
-					APIVersion: "v1",
-					Kind:       "Pod",
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "nginx-pod-1",
-					Namespace: "nginx",
-					UID:       "pod-uid-extraargs",
-					OwnerReferences: []metav1.OwnerReference{
-						{
-							APIVersion: "apps/v1",
-							Kind:       "ReplicaSet",
-							Name:       "nginx-rs-0001",
-							UID:        "replicaset-uid-extraargs",
-						},
+				APIVersion: "v1",
+				Kind:       "Pod",
+				Name:       "nginx-pod-1",
+				Namespace:  "nginx",
+				UID:        "pod-uid-extraargs",
+				OwnerReferences: []metav1.OwnerReference{
+					{
+						APIVersion: "apps/v1",
+						Kind:       "ReplicaSet",
+						Name:       "nginx-rs-0001",
+						UID:        "replicaset-uid-extraargs",
 					},
 				},
 			}
@@ -660,54 +588,42 @@ var _ = Describe("Cookie Secret Deterministic Generation Tests", func() {
 
 		BeforeEach(func() {
 			deployment = &appsv1.Deployment{
-				TypeMeta: metav1.TypeMeta{
-					APIVersion: "apps/v1",
-					Kind:       "Deployment",
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "nginx",
-					Namespace: "nginx",
-					Labels:    map[string]string{"app": "nginx"},
-					UID:       "deployment-uid-vpa",
-				},
+				APIVersion: "apps/v1",
+				Kind:       "Deployment",
+				Name:       "nginx",
+				Namespace:  "nginx",
+				Labels:     map[string]string{"app": "nginx"},
+				UID:        "deployment-uid-vpa",
 			}
 			replicaSet = &appsv1.ReplicaSet{
-				TypeMeta: metav1.TypeMeta{
-					APIVersion: "apps/v1",
-					Kind:       "ReplicaSet",
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "nginx-rs-0001",
-					Namespace: "nginx",
-					UID:       "replicaset-uid-vpa",
-					OwnerReferences: []metav1.OwnerReference{
-						{
-							APIVersion: "apps/v1",
-							Kind:       "Deployment",
-							Name:       "nginx",
-							UID:        "deployment-uid-vpa",
-						},
+				APIVersion: "apps/v1",
+				Kind:       "ReplicaSet",
+				Name:       "nginx-rs-0001",
+				Namespace:  "nginx",
+				UID:        "replicaset-uid-vpa",
+				OwnerReferences: []metav1.OwnerReference{
+					{
+						APIVersion: "apps/v1",
+						Kind:       "Deployment",
+						Name:       "nginx",
+						UID:        "deployment-uid-vpa",
 					},
 				},
 			}
 
 			// Initial pod before VPA update
 			initialPod = &corev1.Pod{
-				TypeMeta: metav1.TypeMeta{
-					APIVersion: "v1",
-					Kind:       "Pod",
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "nginx-pod-vpa",
-					Namespace: "nginx",
-					UID:       "pod-uid-vpa",
-					OwnerReferences: []metav1.OwnerReference{
-						{
-							APIVersion: "apps/v1",
-							Kind:       "ReplicaSet",
-							Name:       "nginx-rs-0001",
-							UID:        "replicaset-uid-vpa",
-						},
+				APIVersion: "v1",
+				Kind:       "Pod",
+				Name:       "nginx-pod-vpa",
+				Namespace:  "nginx",
+				UID:        "pod-uid-vpa",
+				OwnerReferences: []metav1.OwnerReference{
+					{
+						APIVersion: "apps/v1",
+						Kind:       "ReplicaSet",
+						Name:       "nginx-rs-0001",
+						UID:        "replicaset-uid-vpa",
 					},
 				},
 				Spec: corev1.PodSpec{
@@ -722,26 +638,22 @@ var _ = Describe("Cookie Secret Deterministic Generation Tests", func() {
 
 			// Updated pod after VPA in-place update (resources changed)
 			updatedPod = &corev1.Pod{
-				TypeMeta: metav1.TypeMeta{
-					APIVersion: "v1",
-					Kind:       "Pod",
+				APIVersion: "v1",
+				Kind:       "Pod",
+				Name:       "nginx-pod-vpa",
+				Namespace:  "nginx",
+				UID:        "pod-uid-vpa",
+				OwnerReferences: []metav1.OwnerReference{
+					{
+						APIVersion: "apps/v1",
+						Kind:       "ReplicaSet",
+						Name:       "nginx-rs-0001",
+						UID:        "replicaset-uid-vpa",
+					},
 				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "nginx-pod-vpa",
-					Namespace: "nginx",
-					UID:       "pod-uid-vpa",
-					OwnerReferences: []metav1.OwnerReference{
-						{
-							APIVersion: "apps/v1",
-							Kind:       "ReplicaSet",
-							Name:       "nginx-rs-0001",
-							UID:        "replicaset-uid-vpa",
-						},
-					},
-					// VPA adds annotations during in-place update
-					Annotations: map[string]string{
-						"vpa.autoscaling.k8s.io/last-update": "2026-02-17T10:00:00Z",
-					},
+				// VPA adds annotations during in-place update
+				Annotations: map[string]string{
+					"vpa.autoscaling.k8s.io/last-update": "2026-02-17T10:00:00Z",
 				},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
@@ -853,52 +765,40 @@ var _ = Describe("Cookie Secret Deterministic Generation Tests", func() {
 
 		BeforeEach(func() {
 			deployment = &appsv1.Deployment{
-				TypeMeta: metav1.TypeMeta{
-					APIVersion: "apps/v1",
-					Kind:       "Deployment",
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "nginx",
-					Namespace: "nginx",
-					Labels:    map[string]string{"app": "nginx"},
-					UID:       "deployment-uid-sa-token",
-				},
+				APIVersion: "apps/v1",
+				Kind:       "Deployment",
+				Name:       "nginx",
+				Namespace:  "nginx",
+				Labels:     map[string]string{"app": "nginx"},
+				UID:        "deployment-uid-sa-token",
 			}
 			replicaSet = &appsv1.ReplicaSet{
-				TypeMeta: metav1.TypeMeta{
-					APIVersion: "apps/v1",
-					Kind:       "ReplicaSet",
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "nginx-rs-0001",
-					Namespace: "nginx",
-					UID:       "replicaset-uid-sa-token",
-					OwnerReferences: []metav1.OwnerReference{
-						{
-							APIVersion: "apps/v1",
-							Kind:       "Deployment",
-							Name:       "nginx",
-							UID:        "deployment-uid-sa-token",
-						},
+				APIVersion: "apps/v1",
+				Kind:       "ReplicaSet",
+				Name:       "nginx-rs-0001",
+				Namespace:  "nginx",
+				UID:        "replicaset-uid-sa-token",
+				OwnerReferences: []metav1.OwnerReference{
+					{
+						APIVersion: "apps/v1",
+						Kind:       "Deployment",
+						Name:       "nginx",
+						UID:        "deployment-uid-sa-token",
 					},
 				},
 			}
 			pod = &corev1.Pod{
-				TypeMeta: metav1.TypeMeta{
-					APIVersion: "v1",
-					Kind:       "Pod",
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "nginx-pod-1",
-					Namespace: "nginx",
-					UID:       "pod-uid-sa-token",
-					OwnerReferences: []metav1.OwnerReference{
-						{
-							APIVersion: "apps/v1",
-							Kind:       "ReplicaSet",
-							Name:       "nginx-rs-0001",
-							UID:        "replicaset-uid-sa-token",
-						},
+				APIVersion: "v1",
+				Kind:       "Pod",
+				Name:       "nginx-pod-1",
+				Namespace:  "nginx",
+				UID:        "pod-uid-sa-token",
+				OwnerReferences: []metav1.OwnerReference{
+					{
+						APIVersion: "apps/v1",
+						Kind:       "ReplicaSet",
+						Name:       "nginx-rs-0001",
+						UID:        "replicaset-uid-sa-token",
 					},
 				},
 				Spec: corev1.PodSpec{
@@ -906,12 +806,10 @@ var _ = Describe("Cookie Secret Deterministic Generation Tests", func() {
 					Volumes: []corev1.Volume{
 						{
 							Name: "kube-api-access-abcde",
-							VolumeSource: corev1.VolumeSource{
-								Projected: &corev1.ProjectedVolumeSource{
-									Sources: []corev1.VolumeProjection{
-										{ServiceAccountToken: &corev1.ServiceAccountTokenProjection{Path: "token"}},
-										{ConfigMap: &corev1.ConfigMapProjection{LocalObjectReference: corev1.LocalObjectReference{Name: "kube-root-ca.crt"}}},
-									},
+							Projected: &corev1.ProjectedVolumeSource{
+								Sources: []corev1.VolumeProjection{
+									{ServiceAccountToken: &corev1.ServiceAccountTokenProjection{Path: "token"}},
+									{ConfigMap: &corev1.ConfigMapProjection{Name: "kube-root-ca.crt"}},
 								},
 							},
 						},

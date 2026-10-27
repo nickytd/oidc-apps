@@ -129,8 +129,8 @@ Releases are triggered by pushing a semver tag — the tag is the single source
 of truth (there is no VERSION file):
 
 ```bash
-git tag vX.Y.Z
-git push origin vX.Y.Z
+git tag v0.0.1
+git push origin v0.0.1
 ```
 
 This runs the [`Release`](.github/workflows/release.yml) workflow, which:

@@ -1,6 +1,10 @@
 # Stage 1: Build the Go app
 FROM golang:1.27 AS builder
 
+# Version info injected by CI (no .git in the build context).
+ARG VERSION=v0.0.0-unknown
+ARG REVISION=
+
 # Set up the working directory
 WORKDIR /src
 
@@ -9,7 +13,7 @@ COPY . .
 RUN go mod download && cd tools && go mod download
 
 # Build the application
-RUN make build
+RUN make VERSION=${VERSION} REVISION=${REVISION} build
 
 # Stage 2: Produce the runtime image
 FROM gcr.io/distroless/static:nonroot AS oidc-apps

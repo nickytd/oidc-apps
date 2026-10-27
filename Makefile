@@ -6,8 +6,11 @@ REGISTRY                    ?= ghcr.io/nickytd/oidc-apps
 CONTROLLER_IMAGE            := $(REGISTRY)/$(CONTROLLER_NAME)
 WATCHER_IMAGE               := $(REGISTRY)/kube-rbac-proxy
 REPO_ROOT                   := $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
-VERSION                     := $(shell cat "$(REPO_ROOT)/VERSION")
-EFFECTIVE_VERSION           := $(VERSION)-$(shell git rev-parse --short HEAD)
+# Version source: overridable (make VERSION=v1.2.3) for in-Docker builds that
+# have no .git; otherwise derived from git. Falls back when git is unavailable.
+VERSION                     ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo v0.0.0-unknown)
+GIT_SHORT                   := $(shell git rev-parse --short HEAD 2>/dev/null)
+EFFECTIVE_VERSION           := $(if $(GIT_SHORT),$(VERSION)-$(GIT_SHORT),$(VERSION))
 SRC_DIRS                    := $(shell go list -f '{{.Dir}}' $(REPO_ROOT)/...)
 BUILD_PLATFORM              ?= $(shell go env GOOS)
 BUILD_ARCH                  ?= $(shell go env GOARCH)
@@ -23,7 +26,6 @@ D2_THEME                    ?= 200
 GCI_OPT                     ?= -s standard -s default -s "prefix($(shell go list -m))" --skip-generated
 
 ifneq ($(strip $(shell git status --porcelain 2>/dev/null)),)
-	EFFECTIVE_VERSION := $(EFFECTIVE_VERSION)-dirty
 	GIT_TREE_STATE   := dirty
 else
 	GIT_TREE_STATE   := clean
@@ -33,7 +35,8 @@ IMAGE_TAG                   := $(EFFECTIVE_VERSION)
 # Version ldflags for k8s.io/component-base/version
 VERSION_PKG                 := k8s.io/component-base/version
 VERFLAG_PKG                 := $(VERSION_PKG)/verflag
-GIT_COMMIT                  := $(shell git rev-parse --verify HEAD)
+REVISION                    ?= $(shell git rev-parse --verify HEAD 2>/dev/null)
+GIT_COMMIT                  := $(REVISION)
 BUILD_DATE                  := $(shell date '+%Y-%m-%dT%H:%M:%S%z' | sed 's/\([0-9][0-9]\)$$/:&/')
 VERSION_MAJOR               := $(word 1,$(subst ., ,$(VERSION:v%=%)))
 VERSION_MINOR               := $(word 2,$(subst ., ,$(VERSION:v%=%)))

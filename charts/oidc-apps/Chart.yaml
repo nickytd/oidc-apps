@@ -2,5 +2,7 @@ apiVersion: v2
 name: oidc-apps
 description: OIDC authentication and RBAC authorization sidecars for Kubernetes workloads
 type: application
-version: 0.4.0
-appVersion: "v0.5.2"
+# Placeholders — real values injected at release time by
+# `helm package --version <tag-without-v> --app-version <tag>`.
+version: 0.0.0
+appVersion: "0.0.0"

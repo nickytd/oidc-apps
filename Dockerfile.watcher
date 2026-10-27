@@ -3,10 +3,14 @@
 
 FROM golang:1.27 AS builder
 
+# Version info injected by CI (no .git in the build context).
+ARG VERSION=v0.0.0-unknown
+ARG REVISION=
+
 WORKDIR /src
 COPY . .
 RUN go mod download && cd tools && go mod download
-RUN make build-watcher
+RUN make VERSION=${VERSION} REVISION=${REVISION} build-watcher
 
 FROM ghcr.io/kube-rbac-proxy/kube-rbac-proxy:v0.23.0 AS kube-rbac-proxy-watcher
 

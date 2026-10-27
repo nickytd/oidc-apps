@@ -125,20 +125,25 @@ See [example/kind-setup/README.md](example/kind-setup/README.md) for details.
 
 ## Release Process
 
-Releases are driven by the [`Release`](.github/workflows/release.yml) workflow,
-triggered by a push that changes [`VERSION`](VERSION) on `main` (or by manual
-dispatch). To cut a new release:
+Releases are triggered by pushing a semver tag — the tag is the single source
+of truth (there is no VERSION file):
 
-1. Bump [`VERSION`](VERSION) to the next semver tag on `main`.
-2. The workflow then, in order:
-   - bumps `appVersion` in [charts/oidc-apps/Chart.yaml](charts/oidc-apps/Chart.yaml)
-     and pushes the bump commit;
-   - packages and pushes the Helm chart as an OCI artifact to
-     `oci://ghcr.io/nickytd/oidc-apps/charts`;
-   - builds & pushes multi-arch (`amd64` + `arm64`) container images for both
-     `oidc-apps` and `kube-rbac-proxy` to `ghcr.io/nickytd/oidc-apps/`;
-   - creates the `vX.Y.Z` git tag and a GitHub Release with auto-generated
-     notes.
+```bash
+git tag vX.Y.Z
+git push origin vX.Y.Z
+```
+
+This runs the [`Release`](.github/workflows/release.yml) workflow, which:
+
+- builds per-arch images on native runners;
+- assembles `:vX.Y.Z` and `:latest` multi-arch indices for both `oidc-apps` and
+  `kube-rbac-proxy` and pushes them to `ghcr.io/nickytd/oidc-apps/`;
+- pushes the Helm chart to `oci://ghcr.io/nickytd/oidc-apps/charts` with
+  `--version X.Y.Z --app-version vX.Y.Z`;
+- creates the GitHub Release.
+
+A failed run can be re-driven via the workflow's `workflow_dispatch` input (tag
+name).
 
 The chart `version` (the chart-shape version, distinct from `appVersion`) is
 bumped manually in a separate PR when chart values change.

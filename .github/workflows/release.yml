@@ -13,9 +13,10 @@ on:
         description: 'Tag to release (e.g. v0.5.2)'
         required: true
 
-# Serialize releases on the same ref; never cancel an in-flight release.
+# Serialize releases per target version; never cancel an in-flight release.
+# On workflow_dispatch github.ref is the branch, so key on the tag input when present.
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-${{ github.event.inputs.tag || github.ref }}
   cancel-in-progress: false
 
 jobs:

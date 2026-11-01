@@ -12,11 +12,11 @@ require (
 	go.uber.org/automaxprocs v1.6.0
 	go.uber.org/mock v0.6.0
 	gopkg.in/yaml.v3 v3.0.1
-	k8s.io/api v0.37.1
-	k8s.io/apimachinery v0.37.1
+	k8s.io/api v0.37.2
+	k8s.io/apimachinery v0.37.2
 	k8s.io/autoscaler/vertical-pod-autoscaler v1.8.0
-	k8s.io/client-go v0.37.1
-	k8s.io/component-base v0.37.1
+	k8s.io/client-go v0.37.2
+	k8s.io/component-base v0.37.2
 	k8s.io/utils v0.0.0-20260707023825-cf1189d6abe3
 	sigs.k8s.io/controller-runtime v0.25.2
 	sigs.k8s.io/gateway-api v1.6.3

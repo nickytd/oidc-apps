@@ -165,11 +165,11 @@ func RunController(ctx context.Context, o *Options) error {
 		return fmt.Errorf("could not initialize cache indices: %w", err)
 	}
 
-	if err := addDeploymentController(mgr); err != nil {
+	if err := addDeploymentController(mgr, o); err != nil {
 		return fmt.Errorf("could not initialize deployment controller: %w", err)
 	}
 
-	if err := addStatefulSetController(mgr); err != nil {
+	if err := addStatefulSetController(mgr, o); err != nil {
 		return fmt.Errorf("could not initialize statefulset controller: %w", err)
 	}
 
@@ -319,7 +319,7 @@ func initializeManagerIndices(mgr manager.Manager) error {
 	return nil
 }
 
-func addDeploymentController(mgr manager.Manager) error {
+func addDeploymentController(mgr manager.Manager, o *Options) error {
 	return controllerruntime.NewControllerManagedBy(mgr).
 		Named("oidc-apps-deployments").
 		For(&appsv1.Deployment{}).
@@ -340,10 +340,15 @@ func addDeploymentController(mgr manager.Manager) error {
 			&gatewayv1.HTTPRoute{},
 			handler.EnqueueRequestForOwner(mgr.GetScheme(), mgr.GetRESTMapper(), &appsv1.Deployment{}),
 			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})).
-		Complete(&controllers.DeploymentReconciler{Client: mgr.GetClient(), Config: extensionConfig})
+		Complete(&controllers.DeploymentReconciler{
+			Client:              mgr.GetClient(),
+			Config:              extensionConfig,
+			RegistrySecretName:  o.registrySecret,
+			ControllerNamespace: os.Getenv(constants.NAMESPACE),
+		})
 }
 
-func addStatefulSetController(mgr manager.Manager) error {
+func addStatefulSetController(mgr manager.Manager, o *Options) error {
 	return controllerruntime.NewControllerManagedBy(mgr).
 		Named("oidc-apps-statefulsets").
 		For(&appsv1.StatefulSet{}).
@@ -364,7 +369,12 @@ func addStatefulSetController(mgr manager.Manager) error {
 			&gatewayv1.HTTPRoute{},
 			handler.EnqueueRequestsFromMapFunc(HTTPRouteMapFuncForStatefulset(mgr)),
 			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})).
-		Complete(&controllers.StatefulSetReconciler{Client: mgr.GetClient(), Config: extensionConfig})
+		Complete(&controllers.StatefulSetReconciler{
+			Client:              mgr.GetClient(),
+			Config:              extensionConfig,
+			RegistrySecretName:  o.registrySecret,
+			ControllerNamespace: os.Getenv(constants.NAMESPACE),
+		})
 }
 
 // Add certificate manager in case no external certificate manager is available
@@ -382,6 +392,10 @@ func addWebhookCertificateManager(mgr manager.Manager, o *Options) error {
 }
 
 // Add namespace && image pull secret reconcilers if the registry-secret parameter is present
+// addPrivateRegistrySecretControllers registers the image-pull-secret reconciler that keeps the
+// propagated registry-secret copies in sync with the source secret (rotation + source-deletion
+// cleanup). The copies themselves are created and removed on demand by the Deployment and
+// StatefulSet reconcilers as targets appear and leave their namespaces.
 func addPrivateRegistrySecretControllers(mgr manager.Manager, o *Options) error {
 	if o.registrySecret != "" {
 		controllerNamespace := os.Getenv(constants.NAMESPACE)
@@ -395,19 +409,6 @@ func addPrivateRegistrySecretControllers(mgr manager.Manager, o *Options) error 
 			WithEventFilter(imagePullSecretPredicates).
 			Complete(&controllers.ImagePullSecretReconciler{Client: mgr.GetClient(),
 				SecretName: o.registrySecret})
-		if err != nil {
-			return err
-		}
-
-		secretKey := types.NamespacedName{
-			Namespace: controllerNamespace,
-			Name:      o.registrySecret,
-		}
-
-		err = controllerruntime.NewControllerManagedBy(mgr).
-			Named("namespace").
-			For(&corev1.Namespace{}).
-			Complete(&controllers.NamespaceReconciler{Client: mgr.GetClient(), Secret: secretKey})
 		if err != nil {
 			return err
 		}

@@ -18,6 +18,11 @@ import (
 type DeploymentReconciler struct {
 	Client client.Client
 	Config *configuration.OIDCAppsControllerConfig
+	// RegistrySecretName is the configured private registry secret to propagate into target
+	// namespaces; empty when no private registry is configured (propagation disabled).
+	RegistrySecretName string
+	// ControllerNamespace is the namespace holding the source registry secret.
+	ControllerNamespace string
 }
 
 // Reconcile creates the auth & zutz secrets mounted to the target deployment
@@ -49,11 +54,38 @@ func (d *DeploymentReconciler) Reconcile(ctx context.Context, request reconcile.
 			return reconcile.Result{}, err
 		}
 
+		// Remove the propagated registry secret if this was the last target in the namespace.
+		err := cleanupRegistrySecretIfLastTarget(ctx, d.Client, d.Config,
+			d.RegistrySecretName, d.ControllerNamespace, reconciledDeployment)
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+
+		return reconcile.Result{}, nil
+	}
+
+	// A matched target being deleted will not re-enter the dependency path (it is a no-op once the
+	// deletion timestamp is set), so clean up the registry secret here if it was the last target.
+	if !reconciledDeployment.GetDeletionTimestamp().IsZero() {
+		err := cleanupRegistrySecretIfLastTarget(ctx, d.Client, d.Config,
+			d.RegistrySecretName, d.ControllerNamespace, reconciledDeployment)
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+
 		return reconcile.Result{}, nil
 	}
 
 	if !hasOidcAppsPods(ctx, d.Client, reconciledDeployment) {
 		return reconcile.Result{}, nil
+	}
+
+	// Propagate the private registry secret into the target namespace so the injected sidecar
+	// images can be pulled. No-op when no registry secret is configured.
+	err := ensureRegistrySecret(ctx, d.Client,
+		d.RegistrySecretName, d.ControllerNamespace, reconciledDeployment.GetNamespace())
+	if err != nil {
+		return reconcile.Result{}, err
 	}
 
 	// On deletion the owned resources carry owner references to this deployment,

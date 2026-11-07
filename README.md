@@ -24,6 +24,12 @@ global:
     scope: "openid email profile"
     clientId: "grafana"
     oidcIssuerUrl: "https://oidc.provider.com"
+    # PKCE is used when no client secret is set. For a non-PKCE provider, either set
+    # clientSecret inline, or reference an existing Secret (holding the value under the
+    # "client_secret" key) — the reference takes precedence and keeps the value out of the
+    # rendered config:
+    # clientSecretRef:
+    #   name: grafana-oidc-client-secret
   domainName: "company.org"
   gateway:
     managed: true

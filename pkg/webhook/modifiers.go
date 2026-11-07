@@ -414,13 +414,9 @@ func getOIDCProxyContainer(_log logr.Logger, pod *corev1.PodSpec, owner client.O
 		}
 	}
 
-	// Generate a deterministic cookie secret based on owner's name, namespace, and UID.
-	// This ensures the secret remains stable across pod updates (e.g., VPA in-place modifications),
-	// avoiding forbidden pod spec changes.
-	// Strip to 32 hex chars (16 bytes) for AES-128 cipher compatibility.
-	fullHash := randutils.GenerateFullSha256(owner.GetName() + "-" + owner.GetNamespace() + "-" + string(owner.GetUID()) + "-cookie-secret")
-	cookieSecret := fullHash[:32]
-
+	// The oauth2-proxy cookie secret is referenced from a file mounted via the oauth2 secret
+	// (see --cookie-secret-file below). The controller generates it once with crypto/rand and
+	// persists it, keeping it out of the pod spec and stable across VPA in-place updates.
 	container := corev1.Container{
 		Name:            constants.ContainerNameOauth2Proxy,
 		Image:           image,
@@ -429,7 +425,10 @@ func getOIDCProxyContainer(_log logr.Logger, pod *corev1.PodSpec, owner client.O
 			"--config=/etc/oauth2-proxy/oauth2-proxy.cfg",
 			"--code-challenge-method=" + rc.GetCodeChallengeMethod(),
 			"--pass-authorization-header=true",
-			"--cookie-secret=" + cookieSecret,
+			// The cookie secret is a random value generated once and persisted in the oauth2
+			// secret by the controller (see mutateOauth2Secret). Referencing it by file keeps
+			// the value out of the pod spec / process args and stable across VPA in-place updates.
+			"--cookie-secret-file=/etc/oauth2-proxy/" + constants.Oauth2CookieSecretKey,
 			"--cookie-refresh=" + rc.GetCookieRefresh(),
 			"--http-address=0.0.0.0:8000",
 			"--email-domain=" + rc.GetEmailDomain(),

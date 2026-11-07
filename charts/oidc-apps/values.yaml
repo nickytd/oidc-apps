@@ -114,6 +114,13 @@ affinity: {}
 webhook:
   objectSelector: {}
   namespaceSelector: {}
+  # failurePolicy for the admission webhooks. "Ignore" admits pods without sidecar
+  # injection when the webhook is unreachable (favors cluster availability); "Fail"
+  # blocks admission until the webhook responds (fail-closed).
+  failurePolicy: Ignore
+  # Per-call webhook timeout in seconds (1-30). Bounds how long the API server waits
+  # for the webhook before applying failurePolicy.
+  timeoutSeconds: 5
 
 # A selector string following https://pkg.go.dev/k8s.io/apimachinery/pkg/labels@v0.29.2#Parse pattern,
 # used to construct the controller-runtime manager cache. An empty string value defaults to the standard

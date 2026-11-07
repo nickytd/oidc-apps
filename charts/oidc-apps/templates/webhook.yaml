@@ -44,6 +44,8 @@ webhooks:
     admissionReviewVersions:
       - v1
     reinvocationPolicy: IfNeeded
+    failurePolicy: {{ .Values.webhook.failurePolicy }}
+    timeoutSeconds: {{ .Values.webhook.timeoutSeconds }}
   {{- if .Values.vpa.enabled }}
   - name: {{ include "oidc-apps.fullname" . }}-vpas.oidc-apps.io
     clientConfig:
@@ -77,4 +79,6 @@ webhooks:
     admissionReviewVersions:
       - v1
     reinvocationPolicy: IfNeeded
+    failurePolicy: {{ .Values.webhook.failurePolicy }}
+    timeoutSeconds: {{ .Values.webhook.timeoutSeconds }}
   {{- end }}

@@ -56,12 +56,23 @@ func mutateOauth2Secret(secret *corev1.Secret, rc *configuration.ResolvedConfig)
 
 	checksum := randutils.GenerateFullSha256(oauth2Cfg)
 
+	// Generate a random cookie secret once and persist it in the oauth2 secret, reusing it on
+	// subsequent reconciles. This keeps the value stable across pod updates (e.g. VPA in-place
+	// modifications, which forbid pod-spec changes) without deriving it from the owner identity.
+	cookieSecret := secret.Data[constants.Oauth2CookieSecretKey]
+	if len(cookieSecret) == 0 {
+		cookieSecret = []byte(randutils.GenerateRandomString(32))
+	}
+
 	secret.Labels = map[string]string{
 		constants.LabelKey:       constants.LabelValue,
 		constants.SecretLabelKey: constants.Oauth2LabelValue,
 	}
 	secret.Annotations = map[string]string{constants.AnnotationOauth2SecretChecksumKey: checksum}
-	secret.Data = map[string][]byte{"oauth2-proxy.cfg": []byte(oauth2Cfg)}
+	secret.Data = map[string][]byte{
+		"oauth2-proxy.cfg":              []byte(oauth2Cfg),
+		constants.Oauth2CookieSecretKey: cookieSecret,
+	}
 
 	return nil
 }

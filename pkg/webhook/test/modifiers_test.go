@@ -19,12 +19,11 @@ import (
 
 	"github.com/nickytd/oidc-apps/pkg/configuration"
 	"github.com/nickytd/oidc-apps/pkg/constants"
-	"github.com/nickytd/oidc-apps/pkg/randutils"
 	"github.com/nickytd/oidc-apps/pkg/webhook"
 )
 
-var _ = Describe("Cookie Secret Deterministic Generation Tests", func() {
-	Context("when verifying deterministic cookie secret generation", func() {
+var _ = Describe("Cookie Secret File Reference Tests", func() {
+	Context("when injecting the oauth2-proxy cookie secret", func() {
 		var (
 			deployment1      *appsv1.Deployment
 			replicaSet1      *appsv1.ReplicaSet
@@ -93,280 +92,32 @@ var _ = Describe("Cookie Secret Deterministic Generation Tests", func() {
 			}
 		})
 
-		It("should generate the same cookie secret for the same owner inputs", func() {
-			// First call
+		It("should reference the cookie secret via a file, not an inline value", func() {
+			patchedPod := patchPodWithWebhook(pod1, localPodWebhook1)
+
+			args := oauth2ProxyArgs(patchedPod)
+			Expect(args).To(ContainElement(
+				"--cookie-secret-file=/etc/oauth2-proxy/"+constants.Oauth2CookieSecretKey),
+				"oauth2-proxy must read the cookie secret from the mounted secret file")
+		})
+
+		It("should not pass the cookie secret as an inline CLI argument", func() {
+			patchedPod := patchPodWithWebhook(pod1, localPodWebhook1)
+
+			for _, arg := range oauth2ProxyArgs(patchedPod) {
+				Expect(arg).NotTo(HavePrefix("--cookie-secret="),
+					"the cookie secret value must never appear in the pod spec / process args")
+			}
+		})
+
+		It("should emit a stable file arg across repeated admissions (VPA in-place safety)", func() {
 			patchedPod1 := patchPodWithWebhook(pod1, localPodWebhook1)
-			cookieSecret1 := extractCookieSecret(patchedPod1)
-
-			// Second call with the same inputs
 			patchedPod2 := patchPodWithWebhook(pod1, localPodWebhook1)
-			cookieSecret2 := extractCookieSecret(patchedPod2)
 
-			Expect(cookieSecret1).NotTo(BeEmpty(), "Cookie secret should not be empty")
-			Expect(cookieSecret2).NotTo(BeEmpty(), "Cookie secret should not be empty")
-			Expect(cookieSecret1).To(Equal(cookieSecret2), "Same inputs should produce same cookie secret")
-
-			_log.Info("Deterministic cookie secret verified", "secret1", cookieSecret1, "secret2", cookieSecret2)
-		})
-
-		It("should generate the same cookie secret across multiple invocations", func() {
-			const iterations = 5
-
-			var cookieSecrets []string
-
-			for range iterations {
-				patchedPod := patchPodWithWebhook(pod1, localPodWebhook1)
-				cookieSecret := extractCookieSecret(patchedPod)
-				cookieSecrets = append(cookieSecrets, cookieSecret)
-			}
-
-			// Verify all secrets are identical
-			for i := 1; i < iterations; i++ {
-				Expect(cookieSecrets[i]).To(Equal(cookieSecrets[0]),
-					"Cookie secret should be identical across all invocations")
-			}
-
-			_log.Info("Multiple invocations verified", "iterations", iterations, "secret", cookieSecrets[0])
-		})
-
-		It("should match the expected deterministic value based on owner name, namespace, and UID", func() {
-			patchedPod := patchPodWithWebhook(pod1, localPodWebhook1)
-			actualCookieSecret := extractCookieSecret(patchedPod)
-
-			// The cookie secret is generated using: rand.GenerateFullSha256(...) stripped to 32 hex chars (16 bytes)
-			// The owner is the Deployment, so: "nginx" + "-" + "nginx" + "-" + "deployment-uid-1" + "-cookie-secret"
-			fullHash := randutils.GenerateFullSha256("nginx" + "-" + "nginx" + "-" + "deployment-uid-1" + "-cookie-secret")
-			expectedCookieSecret := fullHash[:32]
-
-			Expect(actualCookieSecret).To(Equal(expectedCookieSecret),
-				"Cookie secret should match expected deterministic value")
-
-			_log.Info("Expected value verified", "expected", expectedCookieSecret, "actual", actualCookieSecret)
-		})
-
-		It("should generate a cookie secret of exactly 32 hex characters (16 bytes)", func() {
-			patchedPod := patchPodWithWebhook(pod1, localPodWebhook1)
-			actualCookieSecret := extractCookieSecret(patchedPod)
-
-			// Cookie secret must be 16 bytes (32 hex chars) for AES-128 cipher compatibility
-			Expect(len(actualCookieSecret)).To(Equal(32),
-				"Cookie secret should be exactly 32 hex characters (16 bytes)")
-
-			_log.Info("Cookie secret length verified", "length", len(actualCookieSecret), "expectedLength", 32)
-		})
-	})
-
-	Context("when different owners produce different secrets", func() {
-		var (
-			deployment1     *appsv1.Deployment
-			replicaSet1     *appsv1.ReplicaSet
-			pod1            *corev1.Pod
-			deployment2     *appsv1.Deployment
-			replicaSet2     *appsv1.ReplicaSet
-			pod2            *corev1.Pod
-			deployment3     *appsv1.Deployment
-			replicaSet3     *appsv1.ReplicaSet
-			pod3            *corev1.Pod
-			localPodWebhook *webhook.PodMutator
-		)
-
-		BeforeEach(func() {
-			// First owner: nginx in nginx namespace
-			deployment1 = &appsv1.Deployment{
-				APIVersion: "apps/v1",
-				Kind:       "Deployment",
-				Name:       "nginx",
-				Namespace:  "nginx",
-				Labels:     map[string]string{"app": "nginx"},
-				UID:        "deployment-uid-1",
-			}
-			replicaSet1 = &appsv1.ReplicaSet{
-				APIVersion: "apps/v1",
-				Kind:       "ReplicaSet",
-				Name:       "nginx-rs-0001",
-				Namespace:  "nginx",
-				UID:        "replicaset-uid-1",
-				OwnerReferences: []metav1.OwnerReference{
-					{
-						APIVersion: "apps/v1",
-						Kind:       "Deployment",
-						Name:       "nginx",
-						UID:        "deployment-uid-1",
-					},
-				},
-			}
-			pod1 = &corev1.Pod{
-				APIVersion: "v1",
-				Kind:       "Pod",
-				Name:       "nginx-pod-1",
-				Namespace:  "nginx",
-				UID:        "pod-uid-1",
-				OwnerReferences: []metav1.OwnerReference{
-					{
-						APIVersion: "apps/v1",
-						Kind:       "ReplicaSet",
-						Name:       "nginx-rs-0001",
-						UID:        "replicaset-uid-1",
-					},
-				},
-			}
-
-			// Second owner: nginx in a different namespace (production)
-			deployment2 = &appsv1.Deployment{
-				APIVersion: "apps/v1",
-				Kind:       "Deployment",
-				Name:       "nginx",
-				Namespace:  "production",
-				Labels:     map[string]string{"app": "nginx"},
-				UID:        "deployment-uid-2",
-			}
-			replicaSet2 = &appsv1.ReplicaSet{
-				APIVersion: "apps/v1",
-				Kind:       "ReplicaSet",
-				Name:       "nginx-rs-0001",
-				Namespace:  "production",
-				UID:        "replicaset-uid-2",
-				OwnerReferences: []metav1.OwnerReference{
-					{
-						APIVersion: "apps/v1",
-						Kind:       "Deployment",
-						Name:       "nginx",
-						UID:        "deployment-uid-2",
-					},
-				},
-			}
-			pod2 = &corev1.Pod{
-				APIVersion: "v1",
-				Kind:       "Pod",
-				Name:       "nginx-pod-2",
-				Namespace:  "production",
-				UID:        "pod-uid-2",
-				OwnerReferences: []metav1.OwnerReference{
-					{
-						APIVersion: "apps/v1",
-						Kind:       "ReplicaSet",
-						Name:       "nginx-rs-0001",
-						UID:        "replicaset-uid-2",
-					},
-				},
-			}
-
-			// Third owner: different name in nginx namespace
-			deployment3 = &appsv1.Deployment{
-				APIVersion: "apps/v1",
-				Kind:       "Deployment",
-				Name:       "apache",
-				Namespace:  "nginx",
-				Labels:     map[string]string{"app": "nginx"},
-				UID:        "deployment-uid-3",
-			}
-			replicaSet3 = &appsv1.ReplicaSet{
-				APIVersion: "apps/v1",
-				Kind:       "ReplicaSet",
-				Name:       "apache-rs-0001",
-				Namespace:  "nginx",
-				UID:        "replicaset-uid-3",
-				OwnerReferences: []metav1.OwnerReference{
-					{
-						APIVersion: "apps/v1",
-						Kind:       "Deployment",
-						Name:       "apache",
-						UID:        "deployment-uid-3",
-					},
-				},
-			}
-			pod3 = &corev1.Pod{
-				APIVersion: "v1",
-				Kind:       "Pod",
-				Name:       "apache-pod-1",
-				Namespace:  "nginx",
-				UID:        "pod-uid-3",
-				OwnerReferences: []metav1.OwnerReference{
-					{
-						APIVersion: "apps/v1",
-						Kind:       "ReplicaSet",
-						Name:       "apache-rs-0001",
-						UID:        "replicaset-uid-3",
-					},
-				},
-			}
-
-			s := runtime.NewScheme()
-			err := scheme.AddToScheme(s)
-			Expect(err).NotTo(HaveOccurred())
-
-			fakeClient := fake.NewClientBuilder().
-				WithScheme(s).
-				WithObjects(deployment1, replicaSet1, pod1).
-				WithObjects(deployment2, replicaSet2, pod2).
-				WithObjects(deployment3, replicaSet3, pod3).
-				Build()
-
-			extCfg := configuration.CreateControllerConfigOrDie(
-				filepath.Join(tmpDir, "config.yaml"),
-				configuration.WithClient(fakeClient),
-				configuration.WithLog(_log),
-			)
-
-			localPodWebhook = &webhook.PodMutator{
-				Client: fakeClient,
-				Config: extCfg,
-			}
-		})
-
-		It("should generate different cookie secrets for owners with different namespaces", func() {
-			patchedPod1 := patchPodWithWebhook(pod1, localPodWebhook)
-			cookieSecret1 := extractCookieSecret(patchedPod1)
-
-			patchedPod2 := patchPodWithWebhook(pod2, localPodWebhook)
-			cookieSecret2 := extractCookieSecret(patchedPod2)
-
-			Expect(cookieSecret1).NotTo(BeEmpty(), "Cookie secret 1 should not be empty")
-			Expect(cookieSecret2).NotTo(BeEmpty(), "Cookie secret 2 should not be empty")
-			Expect(cookieSecret1).NotTo(Equal(cookieSecret2),
-				"Different namespaces should produce different cookie secrets")
-
-			_log.Info("Different namespace secrets verified",
-				"namespace1", "nginx", "secret1", cookieSecret1,
-				"namespace2", "production", "secret2", cookieSecret2)
-		})
-
-		It("should generate different cookie secrets for owners with different names", func() {
-			patchedPod1 := patchPodWithWebhook(pod1, localPodWebhook)
-			cookieSecret1 := extractCookieSecret(patchedPod1)
-
-			patchedPod3 := patchPodWithWebhook(pod3, localPodWebhook)
-			cookieSecret3 := extractCookieSecret(patchedPod3)
-
-			Expect(cookieSecret1).NotTo(BeEmpty(), "Cookie secret 1 should not be empty")
-			Expect(cookieSecret3).NotTo(BeEmpty(), "Cookie secret 3 should not be empty")
-			Expect(cookieSecret1).NotTo(Equal(cookieSecret3),
-				"Different owner names should produce different cookie secrets")
-
-			_log.Info("Different name secrets verified",
-				"name1", "nginx", "secret1", cookieSecret1,
-				"name3", "apache", "secret3", cookieSecret3)
-		})
-
-		It("should ensure all three different owners have unique secrets", func() {
-			patchedPod1 := patchPodWithWebhook(pod1, localPodWebhook)
-			cookieSecret1 := extractCookieSecret(patchedPod1)
-
-			patchedPod2 := patchPodWithWebhook(pod2, localPodWebhook)
-			cookieSecret2 := extractCookieSecret(patchedPod2)
-
-			patchedPod3 := patchPodWithWebhook(pod3, localPodWebhook)
-			cookieSecret3 := extractCookieSecret(patchedPod3)
-
-			// All three should be different
-			Expect(cookieSecret1).NotTo(Equal(cookieSecret2))
-			Expect(cookieSecret1).NotTo(Equal(cookieSecret3))
-			Expect(cookieSecret2).NotTo(Equal(cookieSecret3))
-
-			_log.Info("All unique secrets verified",
-				"secret1", cookieSecret1,
-				"secret2", cookieSecret2,
-				"secret3", cookieSecret3)
+			Expect(oauth2ProxyCookieSecretFileArg(patchedPod1)).NotTo(BeEmpty())
+			Expect(oauth2ProxyCookieSecretFileArg(patchedPod1)).
+				To(Equal(oauth2ProxyCookieSecretFileArg(patchedPod2)),
+					"the cookie-secret-file arg must be identical across admissions")
 		})
 	})
 
@@ -687,29 +438,29 @@ var _ = Describe("Cookie Secret Deterministic Generation Tests", func() {
 			}
 		})
 
-		It("should maintain the same cookie secret when VPA performs in-place updates", func() {
+		It("should keep the cookie-secret-file arg stable across VPA in-place updates", func() {
 			// Simulate initial pod creation
 			patchedInitialPod := patchPodWithWebhook(initialPod, localPodWebhook)
-			initialCookieSecret := extractCookieSecret(patchedInitialPod)
+			initialArg := oauth2ProxyCookieSecretFileArg(patchedInitialPod)
 
 			// Simulate VPA in-place update (pod spec changes, but owner remains the same)
 			patchedUpdatedPod := patchPodWithWebhook(updatedPod, localPodWebhook)
-			updatedCookieSecret := extractCookieSecret(patchedUpdatedPod)
+			updatedArg := oauth2ProxyCookieSecretFileArg(patchedUpdatedPod)
 
-			Expect(initialCookieSecret).NotTo(BeEmpty(), "Initial cookie secret should not be empty")
-			Expect(updatedCookieSecret).NotTo(BeEmpty(), "Updated cookie secret should not be empty")
-			Expect(initialCookieSecret).To(Equal(updatedCookieSecret),
-				"Cookie secret should remain stable across VPA in-place updates")
+			Expect(initialArg).NotTo(BeEmpty(), "Initial cookie-secret-file arg should not be empty")
+			Expect(updatedArg).NotTo(BeEmpty(), "Updated cookie-secret-file arg should not be empty")
+			Expect(initialArg).To(Equal(updatedArg),
+				"cookie-secret-file arg should remain stable across VPA in-place updates")
 
 			_log.Info("VPA in-place update stability verified",
-				"initialSecret", initialCookieSecret,
-				"updatedSecret", updatedCookieSecret)
+				"initialArg", initialArg,
+				"updatedArg", updatedArg)
 		})
 
-		It("should maintain cookie secret stability across multiple VPA updates", func() {
+		It("should keep the cookie-secret-file arg stable across multiple VPA updates", func() {
 			const vpaUpdates = 3
 
-			var cookieSecrets []string
+			var args []string
 
 			for i := range vpaUpdates {
 				// Simulate pod with VPA update annotations
@@ -719,39 +470,43 @@ var _ = Describe("Cookie Secret Deterministic Generation Tests", func() {
 				}
 
 				patchedPod := patchPodWithWebhook(podWithVPAUpdate, localPodWebhook)
-				cookieSecret := extractCookieSecret(patchedPod)
-				cookieSecrets = append(cookieSecrets, cookieSecret)
+				args = append(args, oauth2ProxyCookieSecretFileArg(patchedPod))
 			}
 
-			// All cookie secrets should be identical
+			// All args should be identical
 			for i := 1; i < vpaUpdates; i++ {
-				Expect(cookieSecrets[i]).To(Equal(cookieSecrets[0]),
-					"Cookie secret should remain stable across all VPA updates")
+				Expect(args[i]).To(Equal(args[0]),
+					"cookie-secret-file arg should remain stable across all VPA updates")
 			}
 
 			_log.Info("Multiple VPA updates stability verified",
 				"updates", vpaUpdates,
-				"consistentSecret", cookieSecrets[0])
+				"consistentArg", args[0])
 		})
 
-		It("should not cause forbidden pod spec changes due to cookie secret during VPA update", func() {
-			// This test ensures that the cookie secret doesn't change between create and update operations
-			// which would cause a forbidden pod spec change error in Kubernetes
+		It("should not inject a per-admission cookie secret value that would cause forbidden pod spec changes", func() {
+			// The webhook must reference the secret by file, never inject the value inline,
+			// so CREATE and UPDATE admissions produce identical pod specs.
 
 			// Simulate CREATE operation
 			patchedOnCreate := patchPodWithWebhook(initialPod, localPodWebhook)
-			cookieSecretOnCreate := extractCookieSecret(patchedOnCreate)
+			argOnCreate := oauth2ProxyCookieSecretFileArg(patchedOnCreate)
 
 			// Simulate UPDATE operation (VPA in-place update scenario)
 			patchedOnUpdate := patchPodWithWebhook(updatedPod, localPodWebhook)
-			cookieSecretOnUpdate := extractCookieSecret(patchedOnUpdate)
+			argOnUpdate := oauth2ProxyCookieSecretFileArg(patchedOnUpdate)
 
-			Expect(cookieSecretOnCreate).To(Equal(cookieSecretOnUpdate),
-				"Cookie secret should be identical between CREATE and UPDATE operations to avoid forbidden pod spec changes")
+			Expect(argOnCreate).To(Equal(argOnUpdate),
+				"cookie-secret-file arg should be identical between CREATE and UPDATE operations")
+
+			for _, arg := range oauth2ProxyArgs(patchedOnUpdate) {
+				Expect(arg).NotTo(HavePrefix("--cookie-secret="),
+					"the webhook must never inject the cookie secret value inline")
+			}
 
 			_log.Info("CREATE vs UPDATE consistency verified",
-				"createSecret", cookieSecretOnCreate,
-				"updateSecret", cookieSecretOnUpdate)
+				"createArg", argOnCreate,
+				"updateArg", argOnUpdate)
 		})
 	})
 
@@ -934,14 +689,23 @@ var _ = Describe("Cookie Secret Deterministic Generation Tests", func() {
 	})
 })
 
-func extractCookieSecret(pod *corev1.Pod) string {
+// oauth2ProxyArgs returns the args of the oauth2-proxy container in the pod.
+func oauth2ProxyArgs(pod *corev1.Pod) []string {
 	for _, container := range pod.Spec.Containers {
 		if container.Name == constants.ContainerNameOauth2Proxy {
-			for _, arg := range container.Args {
-				if after, ok := strings.CutPrefix(arg, "--cookie-secret="); ok {
-					return after
-				}
-			}
+			return container.Args
+		}
+	}
+
+	return nil
+}
+
+// oauth2ProxyCookieSecretFileArg returns the value of the --cookie-secret-file arg
+// on the oauth2-proxy container, or "" if not present.
+func oauth2ProxyCookieSecretFileArg(pod *corev1.Pod) string {
+	for _, arg := range oauth2ProxyArgs(pod) {
+		if after, ok := strings.CutPrefix(arg, "--cookie-secret-file="); ok {
+			return after
 		}
 	}
 

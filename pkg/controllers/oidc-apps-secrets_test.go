@@ -39,6 +39,88 @@ func resolvedConfigForTest(object *appsv1.Deployment) *configuration.ResolvedCon
 	return cfg.Resolve(context.Background(), object)
 }
 
+// resolvedConfigWithOauth2 resolves a config whose global Oauth2Proxy is fully supplied by the caller.
+func resolvedConfigWithOauth2(object *appsv1.Deployment, o2p *configuration.Oauth2ProxyConfig) *configuration.ResolvedConfig {
+	cfg := &configuration.OIDCAppsControllerConfig{
+		Global: configuration.Global{
+			DomainName:  "example.org",
+			Oauth2Proxy: o2p,
+		},
+		Targets: []configuration.Target{
+			{
+				Name: object.GetName(),
+				LabelSelector: &metav1.LabelSelector{
+					MatchLabels: object.GetLabels(),
+				},
+			},
+		},
+	}
+
+	return cfg.Resolve(context.Background(), object)
+}
+
+func oauth2CfgString(t *testing.T, rc *configuration.ResolvedConfig) string {
+	t.Helper()
+
+	secret := &corev1.Secret{}
+	require.NoError(t, mutateOauth2Secret(secret, rc))
+
+	return string(secret.Data["oauth2-proxy.cfg"])
+}
+
+func TestMutateOauth2SecretClientSecretRendering(t *testing.T) {
+	object := &appsv1.Deployment{
+		Name: "nginx", Namespace: "nginx",
+		Labels: map[string]string{"app": "nginx"}, UID: "uid-1",
+	}
+
+	t.Run("no secret and no ref renders client_secret_file /dev/null (PKCE)", func(t *testing.T) {
+		rc := resolvedConfigWithOauth2(object, &configuration.Oauth2ProxyConfig{
+			ClientID: "client-id", OidcIssuerURL: "https://oidc-provider.org",
+		})
+		cfg := oauth2CfgString(t, rc)
+
+		assert.Contains(t, cfg, `client_secret_file="/dev/null"`)
+		assert.NotContains(t, cfg, "client_secret=")
+	})
+
+	t.Run("inline client secret renders client_secret, no file", func(t *testing.T) {
+		rc := resolvedConfigWithOauth2(object, &configuration.Oauth2ProxyConfig{
+			ClientID: "client-id", OidcIssuerURL: "https://oidc-provider.org",
+			ClientSecret: "inline-secret",
+		})
+		cfg := oauth2CfgString(t, rc)
+
+		assert.Contains(t, cfg, `client_secret="inline-secret"`)
+		assert.NotContains(t, cfg, "client_secret_file")
+	})
+
+	t.Run("clientSecretRef renders client_secret_file at the mount path, value not inlined", func(t *testing.T) {
+		rc := resolvedConfigWithOauth2(object, &configuration.Oauth2ProxyConfig{
+			ClientID: "client-id", OidcIssuerURL: "https://oidc-provider.org",
+			ClientSecretRef: &corev1.SecretReference{Name: "my-client-secret"},
+		})
+		cfg := oauth2CfgString(t, rc)
+
+		assert.Contains(t, cfg, `client_secret_file="/etc/oauth2-proxy/client_secret"`)
+		assert.NotContains(t, cfg, `client_secret="`,
+			"the client secret value must not be inlined when a ref is used")
+	})
+
+	t.Run("clientSecretRef wins over inline client secret", func(t *testing.T) {
+		rc := resolvedConfigWithOauth2(object, &configuration.Oauth2ProxyConfig{
+			ClientID: "client-id", OidcIssuerURL: "https://oidc-provider.org",
+			ClientSecret:    "inline-secret",
+			ClientSecretRef: &corev1.SecretReference{Name: "my-client-secret"},
+		})
+		cfg := oauth2CfgString(t, rc)
+
+		assert.Contains(t, cfg, `client_secret_file="/etc/oauth2-proxy/client_secret"`)
+		assert.NotContains(t, cfg, "inline-secret",
+			"clientSecretRef must take precedence and the inline value must not appear")
+	})
+}
+
 func TestMutateOauth2SecretGeneratesCookieSecretWhenAbsent(t *testing.T) {
 	object := &appsv1.Deployment{
 		Name:      "nginx",

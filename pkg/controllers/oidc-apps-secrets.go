@@ -27,32 +27,29 @@ func oauth2SecretObject(object client.Object) *corev1.Secret {
 }
 
 func mutateOauth2Secret(secret *corev1.Secret, rc *configuration.ResolvedConfig) error {
-	var oauth2Cfg string
-
-	switch rc.GetClientSecret() {
-	case "":
-		oauth2Cfg = configuration.NewOAuth2Config(
-			configuration.WithClientID(rc.GetClientID()),
-			configuration.WithClientSecretFile("/dev/null"),
-			configuration.WithScope(rc.GetScope()),
-			configuration.WithRedirectURL(rc.GetRedirectURL()),
-			configuration.WithOidcIssuerURL(rc.GetOidcIssuerURL()),
-			configuration.EnableSslInsecureSkipVerify(rc.GetSslInsecureSkipVerify()),
-			configuration.EnableInsecureOidcSkipIssuerVerification(rc.GetInsecureOidcSkipIssuerVerification()),
-			configuration.EnableInsecureOidcSkipNonce(rc.GetInsecureOidcSkipNonce()),
-		).Parse()
-	default:
-		oauth2Cfg = configuration.NewOAuth2Config(
-			configuration.WithClientID(rc.GetClientID()),
-			configuration.WithClientSecret(rc.GetClientSecret()),
-			configuration.WithScope(rc.GetScope()),
-			configuration.WithRedirectURL(rc.GetRedirectURL()),
-			configuration.WithOidcIssuerURL(rc.GetOidcIssuerURL()),
-			configuration.EnableSslInsecureSkipVerify(rc.GetSslInsecureSkipVerify()),
-			configuration.EnableInsecureOidcSkipIssuerVerification(rc.GetInsecureOidcSkipIssuerVerification()),
-			configuration.EnableInsecureOidcSkipNonce(rc.GetInsecureOidcSkipNonce()),
-		).Parse()
+	// Choose the client-secret source in priority order: a clientSecretRef mounts the value into
+	// oauth2-proxy and is referenced via client_secret_file (the value is never inlined here); an
+	// inline clientSecret is written into the config; otherwise /dev/null selects PKCE.
+	opts := []configuration.OptOauth2{
+		configuration.WithClientID(rc.GetClientID()),
+		configuration.WithScope(rc.GetScope()),
+		configuration.WithRedirectURL(rc.GetRedirectURL()),
+		configuration.WithOidcIssuerURL(rc.GetOidcIssuerURL()),
+		configuration.EnableSslInsecureSkipVerify(rc.GetSslInsecureSkipVerify()),
+		configuration.EnableInsecureOidcSkipIssuerVerification(rc.GetInsecureOidcSkipIssuerVerification()),
+		configuration.EnableInsecureOidcSkipNonce(rc.GetInsecureOidcSkipNonce()),
 	}
+
+	switch {
+	case rc.GetClientSecretName() != "":
+		opts = append(opts, configuration.WithClientSecretFile(constants.Oauth2ClientSecretFile))
+	case rc.GetClientSecret() != "":
+		opts = append(opts, configuration.WithClientSecret(rc.GetClientSecret()))
+	default:
+		opts = append(opts, configuration.WithClientSecretFile("/dev/null"))
+	}
+
+	oauth2Cfg := configuration.NewOAuth2Config(opts...).Parse()
 
 	checksum := randutils.GenerateFullSha256(oauth2Cfg)
 

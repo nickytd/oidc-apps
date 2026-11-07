@@ -87,6 +87,24 @@ func (rc *ResolvedConfig) GetClientSecret() string {
 	return ""
 }
 
+// GetClientSecretName returns the name of the Secret referenced via clientSecretRef for the given
+// target workload (target-level overrides global), or "" when no reference is configured.
+func (rc *ResolvedConfig) GetClientSecretName() string {
+	if rc.target.Oauth2Proxy != nil &&
+		rc.target.Oauth2Proxy.ClientSecretRef != nil &&
+		rc.target.Oauth2Proxy.ClientSecretRef.Name != "" {
+		return rc.target.Oauth2Proxy.ClientSecretRef.Name
+	}
+
+	if rc.global.Oauth2Proxy != nil &&
+		rc.global.Oauth2Proxy.ClientSecretRef != nil &&
+		rc.global.Oauth2Proxy.ClientSecretRef.Name != "" {
+		return rc.global.Oauth2Proxy.ClientSecretRef.Name
+	}
+
+	return ""
+}
+
 // GetScope returns the OIDC Provider scope for the given target workload
 func (rc *ResolvedConfig) GetScope() string {
 	if rc.target.Oauth2Proxy != nil &&

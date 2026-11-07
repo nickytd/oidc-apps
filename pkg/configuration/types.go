@@ -37,20 +37,24 @@ type Global struct {
 
 // Oauth2ProxyConfig OIDC Provider configuration
 type Oauth2ProxyConfig struct {
-	Scope                              string   `json:"scope,omitzero"`
-	ClientID                           string   `json:"clientId"`
-	ClientSecret                       string   `json:"clientSecret,omitzero"` // #nosec G117
-	RedirectURL                        string   `json:"redirectUrl"`
-	OidcIssuerURL                      string   `json:"oidcIssuerUrl"`
-	SSLInsecureSkipVerify              *bool    `json:"sslInsecureSkipVerify,omitzero"`
-	InsecureOidcSkipIssuerVerification *bool    `json:"insecureOidcSkipIssuerVerification,omitzero"`
-	InsecureOidcSkipNonce              *bool    `json:"insecureOidcSkipNonce,omitzero"`
-	ApprovalPrompt                     string   `json:"approvalPrompt,omitzero"`
-	CookieRefresh                      string   `json:"cookieRefresh,omitzero"`
-	EmailDomain                        string   `json:"emailDomain,omitzero"`
-	SkipProviderButton                 *bool    `json:"skipProviderButton,omitzero"`
-	CodeChallengeMethod                string   `json:"codeChallengeMethod,omitzero"`
-	ExtraArgs                          []string `json:"extraArgs,omitzero"`
+	Scope        string `json:"scope,omitzero"`
+	ClientID     string `json:"clientId"`
+	ClientSecret string `json:"clientSecret,omitzero"` // #nosec G117
+	// ClientSecretRef references an existing Secret holding the OIDC client secret under the
+	// "client_secret" key. When set it takes precedence over the inline ClientSecret, and the
+	// value is mounted into oauth2-proxy (client_secret_file) rather than inlined into its config.
+	ClientSecretRef                    *corev1.SecretReference `json:"clientSecretRef,omitzero"`
+	RedirectURL                        string                  `json:"redirectUrl"`
+	OidcIssuerURL                      string                  `json:"oidcIssuerUrl"`
+	SSLInsecureSkipVerify              *bool                   `json:"sslInsecureSkipVerify,omitzero"`
+	InsecureOidcSkipIssuerVerification *bool                   `json:"insecureOidcSkipIssuerVerification,omitzero"`
+	InsecureOidcSkipNonce              *bool                   `json:"insecureOidcSkipNonce,omitzero"`
+	ApprovalPrompt                     string                  `json:"approvalPrompt,omitzero"`
+	CookieRefresh                      string                  `json:"cookieRefresh,omitzero"`
+	EmailDomain                        string                  `json:"emailDomain,omitzero"`
+	SkipProviderButton                 *bool                   `json:"skipProviderButton,omitzero"`
+	CodeChallengeMethod                string                  `json:"codeChallengeMethod,omitzero"`
+	ExtraArgs                          []string                `json:"extraArgs,omitzero"`
 }
 
 // KubeRbacProxyConfig kube-rbac-proxy configuration

@@ -11,6 +11,11 @@ global:
     # OIDC client secret shared by all oauth2 proxies in the cluster, shall correspond to the application configuration in the oidc provider
     # Uses PKCE client authentication when not set
     clientSecret: ""
+    # Alternatively, reference an existing Secret holding the client secret under the "client_secret"
+    # key. Takes precedence over clientSecret; the value is mounted into oauth2-proxy instead of being
+    # inlined into its configuration.
+    # clientSecretRef:
+    #   name: my-oidc-client-secret
     # OIDC redirect URL shared by all oauth2 proxies in the cluster, shall correspond to the application configuration in the oidc provider
     # Some OIDC providers support wildcards https://*.{{ domainName }}/oauth2/callback
     redirectUrl: ""

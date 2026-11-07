@@ -687,7 +687,100 @@ var _ = Describe("Cookie Secret File Reference Tests", func() {
 			}
 		})
 	})
+
+	Context("when a clientSecretRef is configured", func() {
+		var (
+			deployment      *appsv1.Deployment
+			replicaSet      *appsv1.ReplicaSet
+			pod             *corev1.Pod
+			localPodWebhook *webhook.PodMutator
+		)
+
+		BeforeEach(func() {
+			deployment = &appsv1.Deployment{
+				APIVersion: "apps/v1",
+				Kind:       "Deployment",
+				Name:       "nginx",
+				Namespace:  "nginx",
+				Labels:     map[string]string{"app": "nginx"},
+				UID:        "deployment-uid-csr",
+			}
+			replicaSet = &appsv1.ReplicaSet{
+				APIVersion: "apps/v1",
+				Kind:       "ReplicaSet",
+				Name:       "nginx-rs-0001",
+				Namespace:  "nginx",
+				UID:        "replicaset-uid-csr",
+				OwnerReferences: []metav1.OwnerReference{
+					{APIVersion: "apps/v1", Kind: "Deployment", Name: "nginx", UID: "deployment-uid-csr"},
+				},
+			}
+			pod = &corev1.Pod{
+				APIVersion: "v1",
+				Kind:       "Pod",
+				Name:       "nginx-pod-1",
+				Namespace:  "nginx",
+				UID:        "pod-uid-csr",
+				OwnerReferences: []metav1.OwnerReference{
+					{APIVersion: "apps/v1", Kind: "ReplicaSet", Name: "nginx-rs-0001", UID: "replicaset-uid-csr"},
+				},
+			}
+
+			s := runtime.NewScheme()
+			Expect(scheme.AddToScheme(s)).To(Succeed())
+
+			fakeClient := fake.NewClientBuilder().
+				WithScheme(s).
+				WithObjects(deployment, replicaSet, pod).
+				Build()
+
+			extCfg := &configuration.OIDCAppsControllerConfig{
+				Global: configuration.Global{
+					DomainName: "example.org",
+					Oauth2Proxy: &configuration.Oauth2ProxyConfig{
+						ClientID:        "client-id",
+						OidcIssuerURL:   "https://oidc-provider.org",
+						ClientSecretRef: &corev1.SecretReference{Name: "my-client-secret"},
+					},
+				},
+				Targets: []configuration.Target{
+					{
+						Name:          "nginx",
+						LabelSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "nginx"}},
+					},
+				},
+			}
+			extCfg.SetClient(fakeClient)
+
+			localPodWebhook = &webhook.PodMutator{Client: fakeClient, Config: extCfg}
+		})
+
+		It("mounts the referenced secret into the oauth2-proxy projected volume", func() {
+			patchedPod := patchPodWithWebhook(pod, localPodWebhook)
+
+			Expect(oauth2VolumeHasSecretSource(patchedPod, "my-client-secret")).To(BeTrue(),
+				"the clientSecretRef secret must be a source of the oauth2-proxy projected volume")
+		})
+	})
 })
+
+// oauth2VolumeHasSecretSource reports whether the oauth2-proxy projected volume includes a secret
+// source with the given name.
+func oauth2VolumeHasSecretSource(pod *corev1.Pod, secretName string) bool {
+	for _, vol := range pod.Spec.Volumes {
+		if vol.Name != constants.Oauth2VolumeName || vol.Projected == nil {
+			continue
+		}
+
+		for _, src := range vol.Projected.Sources {
+			if src.Secret != nil && src.Secret.Name == secretName {
+				return true
+			}
+		}
+	}
+
+	return false
+}
 
 // oauth2ProxyArgs returns the args of the oauth2-proxy container in the pod.
 func oauth2ProxyArgs(pod *corev1.Pod) []string {

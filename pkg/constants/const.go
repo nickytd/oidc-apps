@@ -30,6 +30,12 @@ const (
 	// Oauth2CookieSecretKey is the oauth2 Secret data key, and the filename mounted under the
 	// oauth2-proxy volume, holding the random oauth2-proxy cookie secret.
 	Oauth2CookieSecretKey = "cookie-secret" // #nosec G101 -- This is a false positive
+	// Oauth2ClientSecretKey is the data key, and the filename mounted under the oauth2-proxy
+	// volume, that a clientSecretRef'd Secret must use to hold the OIDC client secret.
+	Oauth2ClientSecretKey = "client_secret" // #nosec G101 -- This is a false positive
+	// Oauth2ClientSecretFile is the in-container path oauth2-proxy reads the client secret from
+	// when a clientSecretRef is configured.
+	Oauth2ClientSecretFile = "/etc/oauth2-proxy/client_secret" // #nosec G101 -- This is a false positive
 	// SecretNameResourceAttributes is the name of the resource attributes secret
 	SecretNameResourceAttributes = "resource-attributes"
 	// SecretNameKubeconfig is the name of the kubeconfig secret

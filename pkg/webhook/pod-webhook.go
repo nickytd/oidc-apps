@@ -87,6 +87,16 @@ func (p *PodMutator) Default(ctx context.Context, pod *corev1.Pod) error {
 		)
 	}
 
+	// Mount an optional client secret referenced via clientSecretRef so oauth2-proxy can read it
+	// from client_secret_file instead of the value being inlined into its config.
+	if clientSecretName := rc.GetClientSecretName(); clientSecretName != "" {
+		addProjectedSecretSourceVolume(
+			constants.Oauth2VolumeName,
+			clientSecretName,
+			&pod.Spec,
+		)
+	}
+
 	// Add the resource-attribute secret volume for the kube-rbac-proxy
 	addProjectedSecretSourceVolume(
 		constants.KubeRbacProxyVolumeName,
